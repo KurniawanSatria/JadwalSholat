@@ -310,18 +310,6 @@ ${error.message}
 document.getElementById("lokasi").innerHTML = `<span class="text-red-400">Geolocation not supported</span>`
 }
 }
-
-// check consent state
-if (localStorage.getItem("sholatAppConsent") === "accepted") {
-userConsent = true
-consentModal.style.display = "none"
-getLocation()
-} else if (localStorage.getItem("sholatAppConsent") === "denied") {
-userConsent = false
-consentModal.style.display = "none"
-} else {
-consentModal.style.display = "flex"
-}
 </script>
 
 
