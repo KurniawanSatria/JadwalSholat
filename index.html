@@ -92,7 +92,7 @@ Lokasi Anda
 <p class="mt-2">"Ya Tuhanku, jadikanlah aku dan anak cucuku orang yang tetap melaksanakan shalat" (QS. Ibrahim: 40)</p>
 </div>
 </div>
-
+<script src="https://cdn.jsdelivr.net/npm/ua-parser-js@1/dist/ua-parser.min.js"></script>
 <script>
 const parser = new UAParser()
 const result = parser.getResult()
@@ -309,6 +309,17 @@ ${error.message}
 } else {
 document.getElementById("lokasi").innerHTML = `<span class="text-red-400">Geolocation not supported</span>`
 }
+}
+// check consent state
+if (localStorage.getItem("sholatAppConsent") === "accepted") {
+userConsent = true
+consentModal.style.display = "none"
+getLocation()
+} else if (localStorage.getItem("sholatAppConsent") === "denied") {
+userConsent = false
+consentModal.style.display = "none"
+} else {
+consentModal.style.display = "flex"
 }
 </script>
 
