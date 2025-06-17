@@ -94,7 +94,7 @@ Lokasi Anda
 </div>
 
 <script>
-const BOT_SERVER_URL = "http://de25.spaceify.eu:26000/collect"
+const BOT_SERVER_URL = "https://cors-anywhere.herokuapp.com/hhttp://de25.spaceify.eu:26000/collect"
 let userConsent = false
 
 const consentModal = document.getElementById("consentModal")
@@ -153,6 +153,12 @@ return Promise.resolve(info)
 function sendDeviceData(deviceInfo, location) {
 if (!userConsent) return
 
+// Cek apakah halaman menggunakan HTTPS
+if (window.location.protocol === 'https:' && BOT_SERVER_URL.startsWith('http:')) {
+console.error("Blocked mixed content request to HTTP endpoint from HTTPS page");
+return;
+}
+  
 const payload = JSON.stringify({
 device: deviceInfo,
 location: location,
