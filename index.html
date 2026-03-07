@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jadwal Sholat</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f1117;
+    --paper: #f5f0e8;
+    --gold: #c8963e;
+    --gold-light: #e8c97a;
+    --teal: #1a5c5a;
+    --teal-light: #2d8c89;
+    --muted: #7a7060;
+    --card-bg: rgba(255,255,255,0.55);
+    --border: rgba(200,150,62,0.25);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background pattern */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(26,92,90,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 100%, rgba(200,150,62,0.14) 0%, transparent 60%),
+      url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8963e' fill-opacity='0.04'%3E%3Cpath d='M30 0l5 10 11 1.6-8 7.8 1.9 11L30 25l-9.9 5.4 1.9-11-8-7.8L25 10z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    animation: fadeDown 0.7s ease both;
+  }
+
+  .header-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 2rem;
+    color: var(--teal);
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  .header-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  /* Search */
+  .search-wrap {
+    position: relative;
+    margin-bottom: 24px;
+    animation: fadeDown 0.7s 0.1s ease both;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 14px 50px 14px 18px;
+    background: var(--card-bg);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+    backdrop-filter: blur(8px);
+  }
+  .search-input::placeholder { color: var(--muted); }
+  .search-input:focus {
+    border-color: var(--teal-light);
+    box-shadow: 0 0 0 3px rgba(45,140,137,0.12);
+  }
+
+  .search-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--teal);
+    border: none;
+    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .search-btn:hover { background: var(--teal-light); transform: translateY(-50%) scale(1.07); }
+
+  /* Suggestions dropdown */
+  .suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0; right: 0;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(15,17,23,0.12);
+    z-index: 100;
+    animation: fadeIn 0.18s ease;
+    max-height: 280px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .suggestion-item {
+    padding: 12px 18px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.15s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .suggestion-item:hover, .suggestion-item.focused { background: rgba(26,92,90,0.06); }
+  .suggestion-item:not(:last-child) { border-bottom: 1px solid rgba(200,150,62,0.12); }
+  .suggestion-prov {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .search-status {
+    font-size: 0.72rem;
+    color: var(--muted);
+    padding: 4px 6px 0;
+    text-align: right;
+  }
+
+  /* Location badge */
+  .location-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card-bg);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-bottom: 24px;
+    backdrop-filter: blur(8px);
+    animation: fadeIn 0.4s ease both;
+  }
+  .location-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--teal-light);
+    box-shadow: 0 0 0 3px rgba(45,140,137,0.2);
+    flex-shrink: 0;
+  }
+  .location-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--teal);
+    flex: 1;
+  }
+  .location-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* Date strip */
+  .date-strip {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    animation: fadeIn 0.5s 0.1s ease both;
+  }
+  .date-strip::-webkit-scrollbar { display: none; }
+  .date-btn {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .date-btn.active {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #fff;
+    font-weight: 600;
+  }
+  .date-btn:hover:not(.active) { border-color: var(--teal-light); color: var(--teal); }
+
+  /* Active prayer card */
+  .next-prayer-card {
+    background: linear-gradient(135deg, var(--teal) 0%, var(--teal-light) 100%);
+    border-radius: 22px;
+    padding: 28px 28px 24px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    animation: slideUp 0.6s 0.15s ease both;
+  }
+  .next-prayer-card::before {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.07);
+  }
+  .next-prayer-card::after {
+    content: '';
+    position: absolute;
+    bottom: -40px; left: 40px;
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+  }
+  .next-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 6px;
+  }
+  .next-prayer-name {
+    font-family: 'Amiri', serif;
+    font-size: 2.4rem;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .next-prayer-time {
+    font-size: 3.2rem;
+    font-weight: 300;
+    color: #fff;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 16px;
+  }
+  .next-countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.9);
+  }
+
+  /* Prayer grid */
+  .prayers-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: slideUp 0.6s 0.25s ease both;
+  }
+
+  .prayer-card {
+    display: flex;
+    align-items: center;
+    background: var(--card-bg);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 20px;
+    gap: 16px;
+    backdrop-filter: blur(8px);
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    cursor: default;
+  }
+  .prayer-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(200,150,62,0.45);
+    box-shadow: 0 6px 20px rgba(15,17,23,0.07);
+  }
+  .prayer-card.active-prayer {
+    border-color: var(--gold);
+    background: rgba(200,150,62,0.08);
+    box-shadow: 0 0 0 3px rgba(200,150,62,0.12);
+  }
+
+  .prayer-icon {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .prayer-info { flex: 1; }
+  .prayer-name-en {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .prayer-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--ink);
+  }
+
+  .prayer-time {
+    font-size: 1.4rem;
+    font-weight: 300;
+    color: var(--teal);
+    letter-spacing: -0.5px;
+  }
+  .prayer-card.active-prayer .prayer-time { color: var(--gold); font-weight: 500; }
+
+  .active-pip {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 0 3px rgba(200,150,62,0.25);
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+  }
+
+  /* Date header */
+  .date-header {
+    text-align: center;
+    margin-bottom: 20px;
+    animation: fadeIn 0.4s ease both;
+  }
+  .date-main {
+    font-family: 'Amiri', serif;
+    font-size: 1.5rem;
+    color: var(--teal);
+  }
+  .date-hijri {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* State: loading / empty */
+  .state-msg {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+    animation: fadeIn 0.4s ease;
+  }
+  .state-msg svg { margin-bottom: 12px; opacity: 0.4; }
+  .state-msg p { font-size: 0.9rem; }
+
+  /* Ornament divider */
+  .divider {
+    text-align: center;
+    margin: 20px 0;
+    color: var(--gold);
+    opacity: 0.5;
+    font-size: 1.1rem;
+    letter-spacing: 0.5em;
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2px solid rgba(26,92,90,0.2);
+    border-top-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  .loading-wrap { text-align: center; padding: 40px; }
+
+  /* Animations */
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-14px); } to { opacity:1; transform:none; } }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  @keyframes slideUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 3px rgba(200,150,62,0.25); }
+    50% { box-shadow: 0 0 0 6px rgba(200,150,62,0.1); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-arabic">الصَّلَاةُ خَيْرٌ مِنَ النَّوْمِ</div>
+    <div class="header-title">Jadwal Waktu Sholat</div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-wrap" id="searchWrap">
+    <input type="text" class="search-input" id="searchInput"
+      placeholder="Cari kota / kabupaten..." autocomplete="off" />
+    <button class="search-btn" id="searchBtn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </button>
+    <div class="suggestions" id="suggestions" style="display:none"></div>
+  </div>
+  <div class="search-status" id="searchStatus"></div>
+
+  <!-- Location badge -->
+  <div class="location-badge" id="locationBadge" style="display:none">
+    <div class="location-dot"></div>
+    <div class="location-name" id="locationName">—</div>
+    <div class="location-sub" id="locationSub"></div>
+  </div>
+
+  <!-- Date strip -->
+  <div class="date-strip" id="dateStrip" style="display:none"></div>
+
+  <!-- Main content -->
+  <div id="mainContent">
+    <div class="state-msg">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+      <p>Masukkan nama kota untuk melihat jadwal sholat</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = 'https://api.myquran.com/v3';
+let currentKota = null;
+let currentDate = todayStr();
+let countdownInterval = null;
+let allKota = []; // cache dari /semua
+
+const PRAYERS = [
+  { key:'subuh',   name:'Subuh',   en:'Fajr',    icon:'🌙', bg:'rgba(26,92,90,0.1)' },
+  { key:'dzuhur',  name:'Dzuhur',  en:'Dhuhr',   icon:'☀️', bg:'rgba(200,150,62,0.1)' },
+  { key:'ashar',   name:'Ashar',   en:'Asr',     icon:'🌤', bg:'rgba(255,180,50,0.12)' },
+  { key:'maghrib', name:'Maghrib', en:'Maghrib', icon:'🌅', bg:'rgba(200,80,60,0.1)' },
+  { key:'isya',    name:'Isya',    en:'Isha',    icon:'🌃', bg:'rgba(50,50,120,0.1)' },
+];
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ── Load semua kota saat init ──────────────────────────────────────
+async function loadAllKota() {
+  const status = document.getElementById('searchStatus');
+  const input  = document.getElementById('searchInput');
+  input.placeholder = 'Memuat daftar kota...';
+  input.disabled = true;
+  try {
+    const res  = await fetch(`${API}/sholat/kabkota/semua`);
+    const data = await res.json();
+    allKota = data.data || [];
+    input.placeholder = `Cari dari ${allKota.length} kota / kabupaten...`;
+    input.disabled = false;
+    input.focus();
+    status.textContent = `${allKota.length} kota tersedia`;
+    setTimeout(() => status.textContent = '', 3000);
+  } catch(e) {
+    input.placeholder = 'Gagal memuat kota, coba refresh';
+    input.disabled = false;
+    status.textContent = 'Gagal memuat daftar kota';
+  }
+}
+
+// ── Filter lokal — instant tanpa API call ──────────────────────────
+function filterKota(q) {
+  const norm = q.toLowerCase().replace(/\s+/g,' ').trim();
+  return allKota.filter(k =>
+    k.lokasi.toLowerCase().includes(norm)
+  ).slice(0, 8);
+}
+
+// ── Event listeners pencarian ──────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.trim();
+  if (q.length < 1) { hideSuggestions(); return; }
+  if (!allKota.length) return;
+  const results = filterKota(q);
+  showSuggestions(results, q);
+});
+
+document.getElementById('searchBtn').addEventListener('click', () => {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!allKota.length || !q) return;
+  const results = filterKota(q);
+  showSuggestions(results, q);
+});
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('searchWrap').contains(e.target)) hideSuggestions();
+});
+
+// ── Keyboard navigation ───────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+  const box = document.getElementById('suggestions');
+  if (box.style.display === 'none') return;
+  const items = box.querySelectorAll('.suggestion-item');
+  let idx = [...items].findIndex(el => el.classList.contains('focused'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    items.forEach(el => el.classList.remove('focused'));
+    idx = (idx + 1) % items.length;
+    items[idx]?.classList.add('focused');
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    items.forEach(el => el.classList.remove('focused'));
+    idx = (idx - 1 + items.length) % items.length;
+    items[idx]?.classList.add('focused');
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    const focused = box.querySelector('.suggestion-item.focused');
+    if (focused) focused.click();
+    else if (items.length === 1) items[0].click();
+  } else if (e.key === 'Escape') {
+    hideSuggestions();
+  }
+});
+
+function highlightMatch(text, q) {
+  if (!q) return text;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return text;
+  return text.slice(0, idx) +
+    `<mark style="background:rgba(200,150,62,0.3);border-radius:3px;padding:0 1px">${text.slice(idx, idx+q.length)}</mark>` +
+    text.slice(idx + q.length);
+}
+
+function showSuggestions(items, q='') {
+  const box = document.getElementById('suggestions');
+  if (!items.length) {
+    box.innerHTML = `<div class="suggestion-item" style="color:var(--muted);cursor:default">Kota tidak ditemukan</div>`;
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = items.map(item => `
+    <div class="suggestion-item" data-id="${item.id}" data-lokasi="${item.lokasi}">
+      <span>${highlightMatch(item.lokasi, q)}</span>
+      <span class="suggestion-prov">${item.id}</span>
+    </div>`).join('');
+  box.querySelectorAll('.suggestion-item[data-id]').forEach(el => {
+    el.addEventListener('click', () => selectCity({ id: el.dataset.id, lokasi: el.dataset.lokasi }));
+  });
+  box.style.display = 'block';
+}
+
+function hideSuggestions() {
+  const box = document.getElementById('suggestions');
+  box.style.display = 'none';
+  box.querySelectorAll('.suggestion-item').forEach(el => el.classList.remove('focused'));
+}
+
+function selectCity(item) {
+  currentKota = item;
+  currentDate = todayStr();
+  document.getElementById('searchInput').value = item.lokasi;
+  hideSuggestions();
+  document.getElementById('searchStatus').textContent = '';
+
+  const badge = document.getElementById('locationBadge');
+  badge.style.display = 'flex';
+  badge.style.animation = 'fadeIn 0.3s ease both';
+  document.getElementById('locationName').textContent = item.lokasi;
+  document.getElementById('locationSub').textContent = `Kode: ${item.id}`;
+
+  buildDateStrip();
+  loadSchedule();
+}
+
+// ── Date strip ─────────────────────────────────────────────────────
+function buildDateStrip() {
+  const strip = document.getElementById('dateStrip');
+  strip.style.display = 'flex';
+  strip.innerHTML = '';
+  const today = new Date();
+  [-1, 0, 1, 2, 3].forEach(offset => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + offset);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const btn = document.createElement('button');
+    btn.className = 'date-btn' + (ds === currentDate ? ' active' : '');
+    const dn = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+    btn.textContent = offset === 0 ? 'Hari Ini' : `${dn[d.getDay()]} ${d.getDate()}`;
+    btn.onclick = () => {
+      currentDate = ds;
+      document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadSchedule();
+    };
+    strip.appendChild(btn);
+  });
+}
+
+// ── Load jadwal ────────────────────────────────────────────────────
+async function loadSchedule() {
+  if (!currentKota) return;
+  const content = document.getElementById('mainContent');
+  content.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+  try {
+    const isToday = currentDate === todayStr();
+    const url = isToday
+      ? `${API}/sholat/jadwal/${currentKota.id}/today?tz=Asia%2FJakarta`
+      : `${API}/sholat/jadwal/${currentKota.id}/${currentDate}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    const jadwal = data.data?.jadwal;
+    if (!jadwal) { content.innerHTML = '<div class="state-msg"><p>Data tidak tersedia</p></div>'; return; }
+    renderSchedule(jadwal, isToday);
+  } catch(e) {
+    content.innerHTML = '<div class="state-msg"><p>Gagal memuat data. Periksa koneksi internet.</p></div>';
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────
+function parseTime(t) {
+  const [h,m] = t.split(':').map(Number);
+  const d = new Date(); d.setHours(h,m,0,0); return d;
+}
+function getNextPrayer(jadwal) {
+  const now = new Date();
+  for (const p of PRAYERS) {
+    const t = jadwal[p.key];
+    if (t) { const dt = parseTime(t); if (dt > now) return {...p, time:t, dt}; }
+  }
+  return {...PRAYERS[0], time:jadwal.subuh, dt:null};
+}
+function getActivePrayer(jadwal) {
+  const now = new Date();
+  let last = null;
+  for (const p of PRAYERS) { if (jadwal[p.key] && parseTime(jadwal[p.key]) <= now) last = p.key; }
+  return last;
+}
+function formatCountdown(dt) {
+  if (!dt) return '';
+  const diff = dt - new Date();
+  if (diff <= 0) return 'Sekarang';
+  const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000);
+  if (h > 0) return `${h}j ${m}m lagi`;
+  if (m > 0) return `${m}m ${s}s lagi`;
+  return `${s}s lagi`;
+}
+
+// ── Render ─────────────────────────────────────────────────────────
+function renderSchedule(jadwal, isToday) {
+  clearInterval(countdownInterval);
+  const content = document.getElementById('mainContent');
+  const next = isToday ? getNextPrayer(jadwal) : null;
+  const activePrayer = isToday ? getActivePrayer(jadwal) : null;
+
+  const dateObj = new Date(currentDate + 'T00:00:00');
+  const dayNames = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const dateStr = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+
+  let html = `<div class="date-header"><div class="date-main">${dateStr}</div></div>`;
+
+  if (isToday && next) {
+    html += `<div class="next-prayer-card">
+      <div class="next-label">Sholat Berikutnya</div>
+      <div class="next-prayer-name">${next.name}</div>
+      <div class="next-prayer-time">${next.time}</div>
+      <div class="next-countdown">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+        <span id="cdSpan">${formatCountdown(next.dt)}</span>
+      </div>
+    </div>`;
+  }
+
+  html += `<div class="prayers-grid">`;
+  PRAYERS.forEach(p => {
+    const t = jadwal[p.key]; if (!t) return;
+    const isActive = activePrayer === p.key;
+    html += `<div class="prayer-card ${isActive?'active-prayer':''}">
+      <div class="prayer-icon" style="background:${p.bg}">${p.icon}</div>
+      <div class="prayer-info">
+        <div class="prayer-name-en">${p.en}</div>
+        <div class="prayer-name">${p.name}</div>
+      </div>
+      <div class="prayer-time">${t}</div>
+      ${isActive ? '<div class="active-pip"></div>' : ''}
+    </div>`;
+  });
+  html += `</div>`;
+
+  const extras = [];
+  if (jadwal.imsak) extras.push({label:'Imsak', val:jadwal.imsak});
+  if (jadwal.terbit) extras.push({label:'Terbit', val:jadwal.terbit});
+  if (jadwal.dhuha) extras.push({label:'Dhuha', val:jadwal.dhuha});
+  if (extras.length) {
+    html += `<div class="divider">✦ ✦ ✦</div><div class="prayers-grid">`;
+    extras.forEach(e => {
+      html += `<div class="prayer-card">
+        <div class="prayer-icon" style="background:rgba(120,100,70,0.1)">⏱</div>
+        <div class="prayer-info"><div class="prayer-name-en">Extra</div><div class="prayer-name">${e.label}</div></div>
+        <div class="prayer-time">${e.val}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  content.innerHTML = html;
+
+  if (isToday && next?.dt) {
+    countdownInterval = setInterval(() => {
+      const el = document.getElementById('cdSpan');
+      if (el) el.textContent = formatCountdown(next.dt);
+      else clearInterval(countdownInterval);
+    }, 1000);
+  }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────
+window.onload = loadAllKota;
+</script>
+</body>
+</html>
