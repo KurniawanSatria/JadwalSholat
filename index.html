@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jadwal Sholat</title>
 <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
   :root {
     --ink: #0f1117;
@@ -77,6 +79,7 @@
     position: relative;
     margin-bottom: 24px;
     animation: fadeDown 0.7s 0.1s ease both;
+    z-index: 100;
   }
 
   .search-input {
@@ -127,7 +130,7 @@
     border-radius: 14px;
     overflow: hidden;
     box-shadow: 0 12px 40px rgba(15,17,23,0.12);
-    z-index: 100;
+    z-index: 999;
     animation: fadeIn 0.18s ease;
     max-height: 280px;
     overflow-y: auto;
@@ -158,34 +161,92 @@
 
   /* Location badge */
   .location-badge {
+    position: relative;
+    border-radius: 18px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    border: 1.5px solid var(--border);
+    animation: fadeIn 0.4s ease both;
+    min-height: 160px;
+  }
+  .location-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: brightness(0.38) saturate(0.7);
+    transition: opacity 0.6s ease;
+  }
+  .location-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(15,17,23,0.15) 0%,
+      rgba(26,92,90,0.55) 40%,
+      rgba(15,17,23,0.85) 100%
+    );
+  }
+  .location-content {
+    position: relative;
+    z-index: 1;
+    padding: 18px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+  }
+  .location-top {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: var(--card-bg);
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 16px;
-    margin-bottom: 24px;
-    backdrop-filter: blur(8px);
-    animation: fadeIn 0.4s ease both;
   }
   .location-dot {
-    width: 8px; height: 8px;
+    width: 7px; height: 7px;
     border-radius: 50%;
-    background: var(--teal-light);
-    box-shadow: 0 0 0 3px rgba(45,140,137,0.2);
+    background: var(--gold-light);
+    box-shadow: 0 0 0 3px rgba(232,201,122,0.3);
     flex-shrink: 0;
   }
   .location-name {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--teal);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
     flex: 1;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+    letter-spacing: 0.03em;
   }
-  .location-sub {
-    font-size: 0.75rem;
-    color: var(--muted);
+  .location-province {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    opacity: 0.9;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   }
+  .location-desc {
+    font-size: 0.78rem;
+    line-height: 1.55;
+    color: rgba(255,255,255,0.78);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .location-wiki-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    color: rgba(255,255,255,0.5);
+    text-decoration: none;
+    transition: color 0.2s;
+    align-self: flex-start;
+  }
+  .location-wiki-link:hover { color: var(--gold-light); }
+  .location-sub { display: none; }
 
   /* Date strip */
   .date-strip {
@@ -314,8 +375,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
     flex-shrink: 0;
+  }
+  .prayer-icon svg {
+    width: 20px; height: 20px;
   }
 
   .prayer-info { flex: 1; }
@@ -376,17 +439,119 @@
   .state-msg svg { margin-bottom: 12px; opacity: 0.4; }
   .state-msg p { font-size: 0.9rem; }
 
-  /* Ornament divider */
   .divider {
-    text-align: center;
-    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin: 24px 0;
+    position: relative;
+  }
+  .divider-line {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .divider-line::before, .divider-line::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(200,150,62,0.6), transparent);
+  }
+  .divider-ornament {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     color: var(--gold);
-    opacity: 0.5;
-    font-size: 1.1rem;
-    letter-spacing: 0.5em;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+  }
+  .divider-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 1.15rem;
+    color: var(--gold);
+    text-align: center;
+    line-height: 1.4;
+    opacity: 0.85;
+  }
+  .divider-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    opacity: 0.7;
   }
 
-  /* Spinner */
+  /* Music player floating */
+  .music-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 500;
+    background: rgba(26,92,90,0.92);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(200,150,62,0.3);
+    border-radius: 50px;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    animation: slideUp 0.5s ease both;
+    min-width: 220px;
+  }
+  .music-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+  }
+  .music-info {
+    flex: 1;
+    overflow: hidden;
+  }
+  .music-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .music-sub {
+    font-size: 0.62rem;
+    color: rgba(255,255,255,0.5);
+  }
+  .music-wave {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 16px;
+  }
+  .music-wave span {
+    display: block;
+    width: 2.5px;
+    border-radius: 2px;
+    background: var(--gold-light);
+    animation: wave 1s ease-in-out infinite;
+  }
+  .music-wave span:nth-child(1) { height: 6px;  animation-delay: 0s; }
+  .music-wave span:nth-child(2) { height: 12px; animation-delay: 0.15s; }
+  .music-wave span:nth-child(3) { height: 8px;  animation-delay: 0.3s; }
+  .music-wave span:nth-child(4) { height: 14px; animation-delay: 0.45s; }
+  .music-wave span:nth-child(5) { height: 5px;  animation-delay: 0.6s; }
+  .music-wave.paused span { animation-play-state: paused; }
+  @keyframes wave {
+    0%,100% { transform: scaleY(1); }
+    50%      { transform: scaleY(0.3); }
+  }
   .spinner {
     display: inline-block;
     width: 20px; height: 20px;
@@ -396,6 +561,40 @@
     animation: spin 0.8s linear infinite;
   }
   .loading-wrap { text-align: center; padding: 40px; }
+
+  /* Footer */
+  .footer {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .footer-ornament {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.7;
+  }
+  .footer-arabic {
+    font-family: 'Amiri', serif;
+    font-size: 1.1rem;
+    color: var(--teal);
+    opacity: 0.75;
+  }
+  .footer-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    opacity: 0.8;
+  }
+  .footer-sub a {
+    color: var(--teal-light);
+    text-decoration: none;
+  }
+  .footer-sub a:hover { text-decoration: underline; }
 
   /* Animations */
   @keyframes fadeDown { from { opacity:0; transform:translateY(-14px); } to { opacity:1; transform:none; } }
@@ -422,9 +621,7 @@
     <input type="text" class="search-input" id="searchInput"
       placeholder="Cari kota / kabupaten..." autocomplete="off" />
     <button class="search-btn" id="searchBtn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
+      <i data-lucide="search" style="width:16px;height:16px;stroke:#fff;stroke-width:2.5"></i>
     </button>
     <div class="suggestions" id="suggestions" style="display:none"></div>
   </div>
@@ -432,8 +629,20 @@
 
   <!-- Location badge -->
   <div class="location-badge" id="locationBadge" style="display:none">
-    <div class="location-dot"></div>
-    <div class="location-name" id="locationName">—</div>
+    <div class="location-bg" id="locationBg"></div>
+    <div class="location-bg-overlay"></div>
+    <div class="location-content">
+      <div class="location-top">
+        <div class="location-dot"></div>
+        <div class="location-name" id="locationName">—</div>
+        <div class="location-province" id="locationProvince"></div>
+      </div>
+      <div class="location-desc" id="locationDesc"></div>
+      <a class="location-wiki-link" id="locationWikiLink" href="#" target="_blank">
+        <i data-lucide="external-link" style="width:10px;height:10px;stroke:currentColor;stroke-width:2"></i>
+        Wikipedia
+      </a>
+    </div>
     <div class="location-sub" id="locationSub"></div>
   </div>
 
@@ -443,28 +652,73 @@
   <!-- Main content -->
   <div id="mainContent">
     <div class="state-msg">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-      </svg>
+      <i data-lucide="map-pin" style="width:48px;height:48px;stroke:var(--teal);opacity:0.35;margin-bottom:12px;display:block;margin-inline:auto"></i>
       <p>Masukkan nama kota untuk melihat jadwal sholat</p>
     </div>
   </div>
 
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-ornament">
+      <i data-lucide="moon" style="width:11px;height:11px;stroke:var(--gold);fill:var(--gold);fill-opacity:0.35;stroke-width:1.5"></i>
+      <i data-lucide="star" style="width:7px;height:7px;stroke:var(--gold);fill:var(--gold);stroke-width:1.5"></i>
+      <i data-lucide="moon" style="width:11px;height:11px;stroke:var(--gold);fill:var(--gold);fill-opacity:0.35;stroke-width:1.5"></i>
+    </div>
+    <div class="footer-arabic">كورنياوان ساتريا</div>
+    <div class="footer-sub">dibuat dengan ❤️ oleh <a href="https://instagram.com/krniwnstria" target="_blank">Kurniawan Satria</a> &nbsp;·&nbsp; data dari <a href="https://api.myquran.com" target="_blank">myquran.com</a></div>
+  </footer>
+
+</div>
+
+<!-- Audio -->
+<audio id="bgAudio" loop preload="auto">
+  <source src="https://github.com/KurniawanSatria/Muslim/raw/refs/heads/main/yaleel%20yaleel.mp3" type="audio/mpeg">
+</audio>
+
+<!-- Floating music bar -->
+<div class="music-bar" id="musicBar" style="display:none">
+  <button class="music-btn" id="musicToggle" title="Play/Pause">
+    <i data-lucide="pause" id="musicIcon" style="width:18px;height:18px;stroke:var(--gold-light);stroke-width:2"></i>
+  </button>
+  <div class="music-info">
+    <div class="music-title">Ya Leel Ya Leel</div>
+    <div class="music-sub">Nasheed · loop</div>
+  </div>
+  <div class="music-wave" id="musicWave">
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
 </div>
 
 <script>
-const API = 'https://api.myquran.com/v3';
+const API_BASE = 'https://api.myquran.com/v3';
+// CORS proxies — dicoba berurutan sampai berhasil
+const PROXIES = [
+  url => url,                                                    // direct
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
+async function apiFetch(path) {
+  for (const proxy of PROXIES) {
+    try {
+      const res = await fetch(proxy(API_BASE + path), { signal: AbortSignal.timeout(7000) });
+      if (res.ok) return res;
+    } catch(e) { /* coba proxy berikutnya */ }
+  }
+  throw new Error('Semua proxy gagal');
+}
+
 let currentKota = null;
 let currentDate = todayStr();
 let countdownInterval = null;
-let allKota = []; // cache dari /semua
+let allKota = [];
 
 const PRAYERS = [
-  { key:'subuh',   name:'Subuh',   en:'Fajr',    icon:'🌙', bg:'rgba(26,92,90,0.1)' },
-  { key:'dzuhur',  name:'Dzuhur',  en:'Dhuhr',   icon:'☀️', bg:'rgba(200,150,62,0.1)' },
-  { key:'ashar',   name:'Ashar',   en:'Asr',     icon:'🌤', bg:'rgba(255,180,50,0.12)' },
-  { key:'maghrib', name:'Maghrib', en:'Maghrib', icon:'🌅', bg:'rgba(200,80,60,0.1)' },
-  { key:'isya',    name:'Isya',    en:'Isha',    icon:'🌃', bg:'rgba(50,50,120,0.1)' },
+  { key:'subuh',   name:'Subuh',   en:'Fajr',    bg:'rgba(26,92,90,0.1)',     icon:'moon',        color:'#1a5c5a' },
+  { key:'dzuhur',  name:'Dzuhur',  en:'Dhuhr',   bg:'rgba(200,150,62,0.12)',  icon:'sun',         color:'#c8963e' },
+  { key:'ashar',   name:'Ashar',   en:'Asr',     bg:'rgba(230,160,40,0.12)',  icon:'sun-medium',  color:'#e0960a' },
+  { key:'maghrib', name:'Maghrib', en:'Maghrib', bg:'rgba(200,80,60,0.1)',    icon:'sunset',      color:'#c85040' },
+  { key:'isya',    name:'Isya',    en:'Isha',    bg:'rgba(60,60,130,0.1)',    icon:'star',        color:'#4040aa' },
 ];
 
 function todayStr() {
@@ -479,22 +733,146 @@ async function loadAllKota() {
   input.placeholder = 'Memuat daftar kota...';
   input.disabled = true;
   try {
-    const res  = await fetch(`${API}/sholat/kabkota/semua`);
+    const res  = await apiFetch('/sholat/kabkota/semua');
     const data = await res.json();
     allKota = data.data || [];
     input.placeholder = `Cari dari ${allKota.length} kota / kabupaten...`;
     input.disabled = false;
     input.focus();
-    status.textContent = `${allKota.length} kota tersedia`;
-    setTimeout(() => status.textContent = '', 3000);
+    status.textContent = `✓ ${allKota.length} kota tersedia`;
+    setTimeout(() => status.textContent = '', 3500);
   } catch(e) {
-    input.placeholder = 'Gagal memuat kota, coba refresh';
+    input.placeholder = 'Gagal memuat kota — coba refresh halaman';
     input.disabled = false;
-    status.textContent = 'Gagal memuat daftar kota';
+    status.textContent = '⚠ Gagal terhubung ke API';
   }
 }
 
-// ── Filter lokal — instant tanpa API call ──────────────────────────
+// ── Wikipedia city info ────────────────────────────────────────────
+// Mapping nama kota API → judul artikel Wikipedia Indonesia
+const WIKI_TITLES = {
+  'JAKARTA'   : 'Jakarta',
+  'SURABAYA'  : 'Surabaya',
+  'BANDUNG'   : 'Bandung',
+  'MEDAN'     : 'Medan',
+  'SEMARANG'  : 'Semarang',
+  'YOGYAKARTA': 'Daerah Istimewa Yogyakarta',
+  'JOGJA'     : 'Daerah Istimewa Yogyakarta',
+  'MAKASSAR'  : 'Makassar',
+  'PALEMBANG' : 'Palembang',
+  'PEKANBARU' : 'Pekanbaru',
+  'DENPASAR'  : 'Denpasar',
+  'BALI'      : 'Bali',
+  'MALANG'    : 'Kota Malang',
+  'BOGOR'     : 'Kota Bogor',
+  'DEPOK'     : 'Kota Depok',
+  'TANGERANG' : 'Kota Tangerang',
+  'BEKASI'    : 'Kota Bekasi',
+  'ACEH'      : 'Banda Aceh',
+  'LOMBOK'    : 'Lombok',
+  'MANADO'    : 'Manado',
+  'PONTIANAK' : 'Pontianak',
+  'SAMARINDA' : 'Samarinda',
+  'BALIKPAPAN': 'Balikpapan',
+  'KEDIRI'    : 'Kota Kediri',
+  'SOLO'      : 'Surakarta',
+  'SURAKARTA' : 'Surakarta',
+  'PADANG'    : 'Padang, Sumatera Barat',
+  'MATARAM'   : 'Mataram',
+  'JAYAPURA'  : 'Jayapura',
+  'KUPANG'    : 'Kupang',
+  'CIREBON'   : 'Cirebon',
+  'TASIKMALAYA': 'Tasikmalaya',
+  'SERANG'    : 'Serang',
+  'BATAM'     : 'Batam',
+};
+
+const FALLBACK_GRADIENTS = [
+  'linear-gradient(160deg,#0d3320,#1a5c5a)',
+  'linear-gradient(160deg,#1a2a3a,#2d5a6b)',
+  'linear-gradient(160deg,#2a1a10,#6b3a1a)',
+  'linear-gradient(160deg,#1a1a2a,#3a2d6b)',
+  'linear-gradient(160deg,#0d2020,#1a4040)',
+];
+
+async function loadCityInfo(lokasi) {
+  const bg    = document.getElementById('locationBg');
+  const desc  = document.getElementById('locationDesc');
+  const wlink = document.getElementById('locationWikiLink');
+  const prov  = document.getElementById('locationProvince');
+  if (!bg) return;
+
+  // Reset bersih — hanya pakai backgroundImage, JANGAN pakai background shorthand
+  bg.removeAttribute('style');
+  bg.style.position = 'absolute';
+  bg.style.inset = '0';
+  bg.style.backgroundSize = 'cover';
+  bg.style.backgroundPosition = 'center';
+  bg.style.transition = 'filter 0.6s ease';
+  bg.style.backgroundImage = 'none';
+  bg.style.filter = 'none';
+  desc.textContent = '';
+  wlink.style.display = 'none';
+  if (prov) prov.textContent = '';
+
+  const upper = lokasi.toUpperCase();
+  let wikiTitle = Object.entries(WIKI_TITLES).find(([k]) => upper.includes(k))?.[1];
+  if (!wikiTitle) {
+    wikiTitle = lokasi
+      .replace(/^(KOTA|KABUPATEN|KAB\.?)\s+/i, '')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  // Gradient sementara selagi fetch
+  const idx = lokasi.charCodeAt(0) % FALLBACK_GRADIENTS.length;
+  bg.style.backgroundImage = FALLBACK_GRADIENTS[idx];
+
+  try {
+    const url = `https://id.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('not found');
+    const data = await res.json();
+
+    // Gambar — coba hi-res dulu, fallback ke thumbnail asli
+    const imgUrl = data.thumbnail?.source || data.originalimage?.source;
+    if (imgUrl) {
+      const hiRes = imgUrl.replace(/\/\d+px-/, '/800px-');
+      const tryLoad = (src) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(src);
+        img.onerror = reject;
+        img.src = src;
+      });
+
+      const src = await tryLoad(hiRes).catch(() => tryLoad(imgUrl)).catch(() => null);
+      if (src) {
+        bg.style.backgroundImage = `url('${src}')`;
+        bg.style.filter = 'brightness(0.55) saturate(0.75)';
+      }
+    }
+
+    // Deskripsi
+    if (data.extract) {
+      const clean = data.extract.replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
+      desc.textContent = clean.length > 220 ? clean.slice(0, 220).replace(/\s\S+$/, '') + '…' : clean;
+    }
+
+    // Deskripsi singkat (kota/provinsi)
+    if (data.description && prov) prov.textContent = data.description;
+
+    // Link Wikipedia
+    if (data.content_urls?.desktop?.page) {
+      wlink.href = data.content_urls.desktop.page;
+      wlink.style.display = 'inline-flex';
+      lucide.createIcons({ nodes: [wlink] });
+    }
+
+  } catch(e) {
+    desc.textContent = `${lokasi} — data Wikipedia tidak tersedia.`;
+  }
+}
 function filterKota(q) {
   const norm = q.toLowerCase().replace(/\s+/g,' ').trim();
   return allKota.filter(k =>
@@ -568,7 +946,6 @@ function showSuggestions(items, q='') {
   box.innerHTML = items.map(item => `
     <div class="suggestion-item" data-id="${item.id}" data-lokasi="${item.lokasi}">
       <span>${highlightMatch(item.lokasi, q)}</span>
-      <span class="suggestion-prov">${item.id}</span>
     </div>`).join('');
   box.querySelectorAll('.suggestion-item[data-id]').forEach(el => {
     el.addEventListener('click', () => selectCity({ id: el.dataset.id, lokasi: el.dataset.lokasi }));
@@ -590,10 +967,11 @@ function selectCity(item) {
   document.getElementById('searchStatus').textContent = '';
 
   const badge = document.getElementById('locationBadge');
-  badge.style.display = 'flex';
+  badge.style.display = 'block';
   badge.style.animation = 'fadeIn 0.3s ease both';
   document.getElementById('locationName').textContent = item.lokasi;
   document.getElementById('locationSub').textContent = `Kode: ${item.id}`;
+  loadCityInfo(item.lokasi);
 
   buildDateStrip();
   loadSchedule();
@@ -630,13 +1008,32 @@ async function loadSchedule() {
   content.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
   try {
     const isToday = currentDate === todayStr();
-    const url = isToday
-      ? `${API}/sholat/jadwal/${currentKota.id}/today?tz=Asia%2FJakarta`
-      : `${API}/sholat/jadwal/${currentKota.id}/${currentDate}`;
-    const res  = await fetch(url);
+    const path = isToday
+      ? `/sholat/jadwal/${currentKota.id}/today?tz=Asia%2FJakarta`
+      : `/sholat/jadwal/${currentKota.id}/${currentDate}`;
+    const res  = await apiFetch(path);
     const data = await res.json();
-    const jadwal = data.data?.jadwal;
-    if (!jadwal) { content.innerHTML = '<div class="state-msg"><p>Data tidak tersedia</p></div>'; return; }
+
+    // Struktur: data.data.jadwal["YYYY-MM-DD"] = { subuh, dzuhur, ... }
+    let jadwal = null;
+    const raw = data?.data?.jadwal;
+
+    if (raw && typeof raw === 'object') {
+      // Cek apakah nested by date key (misal: { "2026-03-08": { subuh:... } })
+      const keys = Object.keys(raw);
+      if (keys.length > 0 && typeof raw[keys[0]] === 'object' && 'subuh' in raw[keys[0]]) {
+        jadwal = raw[keys[0]]; // ambil value dari date key pertama
+      } else if ('subuh' in raw) {
+        jadwal = raw; // flat langsung
+      }
+    }
+
+    if (!jadwal) {
+      console.error('Struktur API tidak dikenali:', JSON.stringify(data).slice(0, 500));
+      content.innerHTML = `<div class="state-msg"><p>Format data tidak dikenali.<br><small style="opacity:.6">Lihat console untuk detail.</small></p></div>`;
+      return;
+    }
+
     renderSchedule(jadwal, isToday);
   } catch(e) {
     content.innerHTML = '<div class="state-msg"><p>Gagal memuat data. Periksa koneksi internet.</p></div>';
@@ -652,14 +1049,22 @@ function getNextPrayer(jadwal) {
   const now = new Date();
   for (const p of PRAYERS) {
     const t = jadwal[p.key];
-    if (t) { const dt = parseTime(t); if (dt > now) return {...p, time:t, dt}; }
+    if (t && typeof t === 'string' && t.includes(':')) {
+      const dt = parseTime(t);
+      if (dt > now) return { ...p, time: t, dt };
+    }
   }
-  return {...PRAYERS[0], time:jadwal.subuh, dt:null};
+  // Semua waktu sudah lewat → tampilkan Subuh (besok)
+  const subuhTime = jadwal.subuh || jadwal.imsak || '—';
+  return { ...PRAYERS[0], time: subuhTime, dt: null, note: 'besok' };
 }
 function getActivePrayer(jadwal) {
   const now = new Date();
   let last = null;
-  for (const p of PRAYERS) { if (jadwal[p.key] && parseTime(jadwal[p.key]) <= now) last = p.key; }
+  for (const p of PRAYERS) {
+    const t = jadwal[p.key];
+    if (t && typeof t === 'string' && t.includes(':') && parseTime(t) <= now) last = p.key;
+  }
   return last;
 }
 function formatCountdown(dt) {
@@ -688,12 +1093,12 @@ function renderSchedule(jadwal, isToday) {
 
   if (isToday && next) {
     html += `<div class="next-prayer-card">
-      <div class="next-label">Sholat Berikutnya</div>
+      <div class="next-label">${next.note ? 'Sholat Pertama Besok' : 'Sholat Berikutnya'}</div>
       <div class="next-prayer-name">${next.name}</div>
       <div class="next-prayer-time">${next.time}</div>
       <div class="next-countdown">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
-        <span id="cdSpan">${formatCountdown(next.dt)}</span>
+    <i data-lucide="clock" style="width:13px;height:13px;stroke:rgba(255,255,255,0.9);stroke-width:2.5;flex-shrink:0"></i>
+        <span id="cdSpan">${next.dt ? formatCountdown(next.dt) : next.note ? 'Besok' : '—'}</span>
       </div>
     </div>`;
   }
@@ -703,7 +1108,9 @@ function renderSchedule(jadwal, isToday) {
     const t = jadwal[p.key]; if (!t) return;
     const isActive = activePrayer === p.key;
     html += `<div class="prayer-card ${isActive?'active-prayer':''}">
-      <div class="prayer-icon" style="background:${p.bg}">${p.icon}</div>
+      <div class="prayer-icon" style="background:${p.bg}">
+        <i data-lucide="${p.icon}" style="width:20px;height:20px;stroke:${p.color};stroke-width:1.8"></i>
+      </div>
       <div class="prayer-info">
         <div class="prayer-name-en">${p.en}</div>
         <div class="prayer-name">${p.name}</div>
@@ -719,11 +1126,24 @@ function renderSchedule(jadwal, isToday) {
   if (jadwal.terbit) extras.push({label:'Terbit', val:jadwal.terbit});
   if (jadwal.dhuha) extras.push({label:'Dhuha', val:jadwal.dhuha});
   if (extras.length) {
-    html += `<div class="divider">✦ ✦ ✦</div><div class="prayers-grid">`;
+    html += `<div class="divider">
+      <div class="divider-line">
+        <div class="divider-ornament">❧ <i data-lucide="star" style="width:9px;height:9px;stroke:var(--gold);fill:var(--gold);stroke-width:1.5"></i> ❧</div>
+      </div>
+      <div class="divider-arabic">رَمَضَان الْمُبَارَك</div>
+      <div class="divider-label">Waktu Ramadhan</div>
+      <div class="divider-line">
+        <div class="divider-ornament">❧ <i data-lucide="moon" style="width:9px;height:9px;stroke:var(--gold);fill:var(--gold);fill-opacity:0.5;stroke-width:1.5"></i> ❧</div>
+      </div>
+    </div><div class="prayers-grid">`;
+    const extraIcons = { Imsak:'moon', Terbit:'sunrise', Dhuha:'sun-dim' };
     extras.forEach(e => {
+      const ic = extraIcons[e.label] || 'moon';
       html += `<div class="prayer-card">
-        <div class="prayer-icon" style="background:rgba(120,100,70,0.1)">⏱</div>
-        <div class="prayer-info"><div class="prayer-name-en">Extra</div><div class="prayer-name">${e.label}</div></div>
+        <div class="prayer-icon" style="background:rgba(200,150,62,0.08)">
+          <i data-lucide="${ic}" style="width:20px;height:20px;stroke:var(--gold);stroke-width:1.8"></i>
+        </div>
+        <div class="prayer-info"><div class="prayer-name-en">Ramadhan</div><div class="prayer-name">${e.label}</div></div>
         <div class="prayer-time">${e.val}</div>
       </div>`;
     });
@@ -731,6 +1151,7 @@ function renderSchedule(jadwal, isToday) {
   }
 
   content.innerHTML = html;
+  lucide.createIcons();
 
   if (isToday && next?.dt) {
     countdownInterval = setInterval(() => {
@@ -742,7 +1163,62 @@ function renderSchedule(jadwal, isToday) {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────
-window.onload = loadAllKota;
+window.onload = () => {
+  lucide.createIcons();
+  loadAllKota();
+  initMusic();
+};
+
+// ── Music ──────────────────────────────────────────────────────────
+function initMusic() {
+  const audio = document.getElementById('bgAudio');
+  const bar   = document.getElementById('musicBar');
+  const btn   = document.getElementById('musicToggle');
+  const wave  = document.getElementById('musicWave');
+
+  Swal.fire({
+    title: '<span style="font-family:Amiri,serif;font-size:1.4rem;color:#1a5c5a">🎵 Putar Musik?</span>',
+    html: '<p style="font-size:0.88rem;color:#7a7060;margin:0">Ya Leel Ya Leel — Nasheed<br>akan diputar sebagai latar</p>',
+    showCancelButton: true,
+    confirmButtonText: 'Ya, Putar',
+    cancelButtonText: 'Tidak',
+    confirmButtonColor: '#1a5c5a',
+    cancelButtonColor: '#c8963e',
+    background: '#f5f0e8',
+    borderRadius: '18px',
+    customClass: { popup: 'swal-music-popup' },
+    width: '320px',
+  }).then(result => {
+    if (result.isConfirmed) {
+      audio.volume = 0.45;
+      audio.play().then(() => {
+        bar.style.display = 'flex';
+        lucide.createIcons({ nodes: [btn] });
+      }).catch(() => {});
+    }
+  });
+
+  // Toggle play/pause
+  btn.addEventListener('click', () => {
+    if (audio.paused) {
+      audio.play();
+      updateMusicUI(true);
+    } else {
+      audio.pause();
+      updateMusicUI(false);
+    }
+  });
+
+  audio.addEventListener('play',  () => updateMusicUI(true));
+  audio.addEventListener('pause', () => updateMusicUI(false));
+
+  function updateMusicUI(playing) {
+    const icon = document.getElementById('musicIcon');
+    wave.className = 'music-wave' + (playing ? '' : ' paused');
+    icon.setAttribute('data-lucide', playing ? 'pause' : 'play');
+    lucide.createIcons({ nodes: [icon] });
+  }
+}
 </script>
 </body>
 </html>
