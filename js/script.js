@@ -234,6 +234,20 @@ async function loadCityInfo(lokasi) {
     }
 }
 
+function popularCities() {
+    const wants = ['JAKARTA', 'BANDUNG', 'SURABAYA', 'MEDAN', 'MAKASSAR'];
+    const found = [];
+    for (const w of wants) {
+        const hit = allKota.find(k => k.lokasi.toUpperCase().includes(w));
+        if (hit && !found.some(f => f.id === hit.id)) found.push(hit);
+    }
+    for (const k of allKota) {
+        if (found.length >= 5) break;
+        if (!found.some(f => f.id === k.id)) found.push(k);
+    }
+    return found.slice(0, 5);
+}
+
 function filterKota(q) {
     const norm = q.toLowerCase().replace(/\s+/g, ' ').trim();
     return allKota.filter(k =>
@@ -333,7 +347,22 @@ function showSuggestions(items, q = '') {
     activeDescendantIdx = -1;
     input.removeAttribute('aria-activedescendant');
     if (!items.length) {
-        box.innerHTML = `<li class="suggestion-item" role="presentation" style="padding:12px 18px;color:var(--muted)">Kota tidak ditemukan</li>`;
+        // No-results dead-end fix (ux-pro-max: Search/No Results): tawarkan kota populer
+        const popular = popularCities().slice(0, 5);
+        const popularHtml = popular.length
+            ? `<li class="suggestion-item" role="presentation" style="padding:8px 18px 0;color:var(--muted);font-size:0.75rem">Coba kota populer:</li>` +
+              popular.map(item => `
+    <li class="suggestion-item" role="option" id="suggestion-pop-${escapeHtml(item.id)}" aria-selected="false" data-id="${escapeHtml(item.id)}" data-lokasi="${escapeHtml(item.lokasi)}">
+      <button type="button" tabindex="-1">${escapeHtml(item.lokasi)}</button>
+    </li>`).join('')
+            : '';
+        box.innerHTML = `<li class="suggestion-item" role="presentation" style="padding:12px 18px;color:var(--muted)">Kota tidak ditemukan</li>${popularHtml}`;
+        box.querySelectorAll('.suggestion-item[data-id] button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const li = btn.closest('.suggestion-item');
+                selectCity({ id: li.dataset.id, lokasi: li.dataset.lokasi });
+            });
+        });
         box.hidden = false;
         input.setAttribute('aria-expanded', 'true');
         return;
@@ -405,11 +434,22 @@ function buildDateStrip() {
     });
 }
 
-// ── Load jadwal ────────────────────────────────────────────────────
+// ── Load jadwal (spinner ditunda 250ms anti-flash + aria-busy, ux-pro-max) ──
+let loadToken = 0;
 async function loadSchedule() {
     if (!currentKota) return;
     const content = document.getElementById('mainContent');
-    content.innerHTML = '<div class="loading-wrap"><progress class="loading-spinner" aria-label="Memuat jadwal sholat"></progress></div>';
+    const myToken = ++loadToken;
+    content.setAttribute('aria-busy', 'true');
+    const spinnerTimer = setTimeout(() => {
+        if (myToken !== loadToken) return;
+        content.innerHTML = `
+            <div class="skel skel-card" style="margin-bottom:10px"></div>
+            <div class="skel skel-card" style="margin-bottom:10px"></div>
+            <div class="skel skel-card" style="margin-bottom:10px"></div>
+            <div class="skel skel-card" style="margin-bottom:10px"></div>
+            <div class="loading-wrap"><progress class="loading-spinner" aria-label="Memuat jadwal sholat"></progress></div>`;
+    }, 250);
     try {
         const isToday = currentDate === todayStr();
         const path = isToday
@@ -417,6 +457,7 @@ async function loadSchedule() {
             : `/sholat/jadwal/${currentKota.id}/${currentDate}`;
         const res = await apiFetch(path);
         const data = await res.json();
+        if (myToken !== loadToken) return;
 
         let jadwal = null;
         const raw = data?.data?.jadwal;
@@ -432,13 +473,21 @@ async function loadSchedule() {
 
         if (!jadwal) {
             console.error('Struktur API tidak dikenali:', JSON.stringify(data).slice(0, 500));
+            clearTimeout(spinnerTimer);
+            content.removeAttribute('aria-busy');
             content.innerHTML = `<div class="state-msg" role="alert"><p>Format data tidak dikenali.<br><small style="opacity:.6">Lihat console untuk detail.</small></p></div>`;
             return;
         }
 
         await yieldToMain();
+        if (myToken !== loadToken) return;
+        clearTimeout(spinnerTimer);
+        content.removeAttribute('aria-busy');
         renderSchedule(jadwal, isToday);
     } catch (e) {
+        if (myToken !== loadToken) return;
+        clearTimeout(spinnerTimer);
+        content.removeAttribute('aria-busy');
         content.innerHTML = '<div class="state-msg" role="alert"><p>Gagal memuat data. Periksa koneksi internet.</p></div>';
     }
 }

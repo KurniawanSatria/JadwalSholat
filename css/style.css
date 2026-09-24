@@ -941,6 +941,26 @@
       padding: 40px;
   }
 
+  /* Skeleton placeholder (ux-pro-max: stable skeleton > flickering spinner) */
+  .skel {
+      border-radius: 16px;
+      background: linear-gradient(90deg,
+          color-mix(in srgb, var(--muted) 10%, transparent) 25%,
+          color-mix(in srgb, var(--muted) 18%, transparent) 50%,
+          color-mix(in srgb, var(--muted) 10%, transparent) 75%);
+      background-size: 200% 100%;
+      animation: skel 1.2s ease-in-out infinite;
+  }
+
+  @keyframes skel {
+      from { background-position: 200% 0; }
+      to { background-position: -200% 0; }
+  }
+
+  .skel-card {
+      height: 64px;
+  }
+
   /* Footer */
   .footer {
       margin-top: 40px;
