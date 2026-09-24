@@ -1,19 +1,22 @@
-const API_BASE = 'https://api.myquran.com/v3';
-// CORS proxies — dicoba berurutan sampai berhasil
-const PROXIES = [
-    url => url,
-    url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+// API primer: muslim-api sendiri (offline, CORS terbuka). Fallback: myquran + proxy.
+const PRIMARY_API = 'https://islamic-api.vercel.app';
+const FALLBACK_API = 'https://api.myquran.com/v3';
+// Kandidat endpoint dicoba berurutan sampai ada yang ok
+const API_CANDIDATES = [
+    path => PRIMARY_API + path,                                              // muslim-api langsung
+    path => FALLBACK_API + path,                                             // myquran langsung
+    path => `https://corsproxy.io/?url=${encodeURIComponent(FALLBACK_API + path)}`,
+    path => `https://api.allorigins.win/raw?url=${encodeURIComponent(FALLBACK_API + path)}`,
 ];
 
 async function apiFetch(path) {
-    for (const proxy of PROXIES) {
+    for (const buildUrl of API_CANDIDATES) {
         try {
-            const res = await fetch(proxy(API_BASE + path), { signal: AbortSignal.timeout(7000) });
+            const res = await fetch(buildUrl(path), { signal: AbortSignal.timeout(7000) });
             if (res.ok) return res;
-        } catch (e) { /* coba proxy berikutnya */ }
+        } catch (e) { /* coba kandidat berikutnya */ }
     }
-    throw new Error('Semua proxy gagal');
+    throw new Error('Semua API gagal');
 }
 
 let currentKota = null;
@@ -75,7 +78,7 @@ async function loadAllKota() {
 
     // Serve stale cache instantly, revalidate in background
     try {
-        const cached = localStorage.getItem('jadwalsholat:kota:v1');
+        const cached = localStorage.getItem('jadwalsholat:kota:v2');
         if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed.data) && parsed.data.length) {
@@ -91,7 +94,7 @@ async function loadAllKota() {
         const data = await res.json();
         allKota = data.data || [];
         try {
-            localStorage.setItem('jadwalsholat:kota:v1', JSON.stringify({ data: allKota, ts: Date.now() }));
+            localStorage.setItem('jadwalsholat:kota:v2', JSON.stringify({ data: allKota, ts: Date.now() }));
         } catch (e) { /* quota, ignore */ }
         input.placeholder = `Cari dari ${allKota.length} kota / kabupaten...`;
         input.disabled = false;
