@@ -1,7 +1,7 @@
 const API_BASE = 'https://api.myquran.com/v3';
 // CORS proxies — dicoba berurutan sampai berhasil
 const PROXIES = [
-    url => url,                                                    // direct
+    url => url,
     url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
     url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
 ];
@@ -20,6 +20,7 @@ let currentKota = null;
 let currentDate = todayStr();
 let countdownInterval = null;
 let allKota = [];
+let activeDescendantIdx = -1;
 
 const PRAYERS = [
     { key: 'subuh', name: 'Subuh', en: 'Fajr', bg: 'rgba(26,92,90,0.1)', icon: 'moon', color: '#1a5c5a' },
@@ -34,30 +35,83 @@ function todayStr() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ── Load semua kota saat init ──────────────────────────────────────
+// Yield to main thread to keep INP < 50ms (performance guide)
+async function yieldToMain() {
+    if ('scheduler' in window && 'yield' in scheduler) {
+        return await scheduler.yield();
+    }
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function debounce(fn, wait = 180) {
+    let t;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), wait);
+    };
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+function refreshIcons(root) {
+    if (window.lucide?.createIcons) {
+        try {
+            if (root) lucide.createIcons({ attrs: { 'aria-hidden': 'true' }, nodes: [root] });
+            else lucide.createIcons({ attrs: { 'aria-hidden': 'true' } });
+        } catch (e) { /* icons are decorative, ignore */ }
+    }
+}
+
+// ── Load semua kota saat init (StaleWhileRevalidate lite) ─────────────
 async function loadAllKota() {
     const status = document.getElementById('searchStatus');
     const input = document.getElementById('searchInput');
     input.placeholder = 'Memuat daftar kota...';
     input.disabled = true;
+
+    // Serve stale cache instantly, revalidate in background
+    try {
+        const cached = localStorage.getItem('jadwalsholat:kota:v1');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed.data) && parsed.data.length) {
+                allKota = parsed.data;
+                input.placeholder = `Cari dari ${allKota.length} kota / kabupaten...`;
+                input.disabled = false;
+            }
+        }
+    } catch (e) { /* ignore corrupt cache */ }
+
     try {
         const res = await apiFetch('/sholat/kabkota/semua');
         const data = await res.json();
         allKota = data.data || [];
+        try {
+            localStorage.setItem('jadwalsholat:kota:v1', JSON.stringify({ data: allKota, ts: Date.now() }));
+        } catch (e) { /* quota, ignore */ }
         input.placeholder = `Cari dari ${allKota.length} kota / kabupaten...`;
         input.disabled = false;
-        input.focus();
+        if (!cachedHadData()) input.focus({ preventScroll: true });
         status.textContent = `✓ ${allKota.length} kota tersedia`;
-        setTimeout(() => status.textContent = '', 3500);
+        setTimeout(() => { if (status.textContent.startsWith('✓')) status.textContent = ''; }, 3500);
     } catch (e) {
-        input.placeholder = 'Gagal memuat kota — coba refresh halaman';
-        input.disabled = false;
-        status.textContent = '⚠ Gagal terhubung ke API';
+        if (!allKota.length) {
+            input.placeholder = 'Gagal memuat kota — coba refresh halaman';
+            input.disabled = false;
+            status.textContent = '⚠ Gagal terhubung ke API';
+        } else {
+            status.textContent = `✓ ${allKota.length} kota tersedia (offline)`;
+        }
     }
+
+    function cachedHadData() { return allKota.length > 0; }
 }
 
 // ── Wikipedia city info ────────────────────────────────────────────
-// Mapping nama kota API → judul artikel Wikipedia Indonesia
 const WIKI_TITLES = {
     'JAKARTA': 'Jakarta',
     'SURABAYA': 'Surabaya',
@@ -110,7 +164,6 @@ async function loadCityInfo(lokasi) {
     const prov = document.getElementById('locationProvince');
     if (!bg) return;
 
-    // Reset bersih — hanya pakai backgroundImage, JANGAN pakai background shorthand
     bg.removeAttribute('style');
     bg.style.position = 'absolute';
     bg.style.inset = '0';
@@ -120,7 +173,7 @@ async function loadCityInfo(lokasi) {
     bg.style.backgroundImage = 'none';
     bg.style.filter = 'none';
     desc.textContent = '';
-    wlink.style.display = 'none';
+    wlink.hidden = true;
     if (prov) prov.textContent = '';
 
     const upper = lokasi.toUpperCase();
@@ -133,7 +186,6 @@ async function loadCityInfo(lokasi) {
             .join(' ');
     }
 
-    // Gradient sementara selagi fetch
     const idx = lokasi.charCodeAt(0) % FALLBACK_GRADIENTS.length;
     bg.style.backgroundImage = FALLBACK_GRADIENTS[idx];
 
@@ -143,12 +195,12 @@ async function loadCityInfo(lokasi) {
         if (!res.ok) throw new Error('not found');
         const data = await res.json();
 
-        // Gambar — coba hi-res dulu, fallback ke thumbnail asli
         const imgUrl = data.thumbnail?.source || data.originalimage?.source;
         if (imgUrl) {
             const hiRes = imgUrl.replace(/\/\d+px-/, '/800px-');
             const tryLoad = (src) => new Promise((resolve, reject) => {
                 const img = new Image();
+                img.decoding = 'async';
                 img.onload = () => resolve(src);
                 img.onerror = reject;
                 img.src = src;
@@ -161,26 +213,24 @@ async function loadCityInfo(lokasi) {
             }
         }
 
-        // Deskripsi
         if (data.extract) {
             const clean = data.extract.replace(/\(.*?\)/g, '').replace(/\s+/g, ' ').trim();
             desc.textContent = clean.length > 220 ? clean.slice(0, 220).replace(/\s\S+$/, '') + '…' : clean;
         }
 
-        // Deskripsi singkat (kota/provinsi)
         if (data.description && prov) prov.textContent = data.description;
 
-        // Link Wikipedia
         if (data.content_urls?.desktop?.page) {
             wlink.href = data.content_urls.desktop.page;
-            wlink.style.display = 'inline-flex';
-            lucide.createIcons({ nodes: [wlink] });
+            wlink.hidden = false;
+            refreshIcons(wlink);
         }
 
     } catch (e) {
         desc.textContent = `${lokasi} — data Wikipedia tidak tersedia.`;
     }
 }
+
 function filterKota(q) {
     const norm = q.toLowerCase().replace(/\s+/g, ' ').trim();
     return allKota.filter(k =>
@@ -188,82 +238,121 @@ function filterKota(q) {
     ).slice(0, 8);
 }
 
-// ── Event listeners pencarian ──────────────────────────────────────
-document.getElementById('searchInput').addEventListener('input', function () {
-    const q = this.value.trim();
-    if (q.length < 1) { hideSuggestions(); return; }
-    if (!allKota.length) return;
-    const results = filterKota(q);
-    showSuggestions(results, q);
-});
-
-document.getElementById('searchBtn').addEventListener('click', () => {
-    const q = document.getElementById('searchInput').value.trim();
-    if (!allKota.length || !q) return;
-    const results = filterKota(q);
-    showSuggestions(results, q);
-});
-
-document.addEventListener('click', e => {
-    if (!document.getElementById('searchWrap').contains(e.target)) hideSuggestions();
-});
-
-// ── Keyboard navigation ───────────────────────────────────────────
-document.getElementById('searchInput').addEventListener('keydown', function (e) {
+// ── Search: combobox pattern (html + accessibility + forms guides) ──
+function bindSearch() {
+    const input = document.getElementById('searchInput');
+    const form = document.getElementById('searchForm');
     const box = document.getElementById('suggestions');
-    if (box.style.display === 'none') return;
-    const items = box.querySelectorAll('.suggestion-item');
-    let idx = [...items].findIndex(el => el.classList.contains('focused'));
-    if (e.key === 'ArrowDown') {
+
+    const doSearch = debounce(() => {
+        const q = input.value.trim();
+        if (q.length < 1) { hideSuggestions(); return; }
+        if (!allKota.length) return;
+        showSuggestions(filterKota(q), q);
+    }, 180);
+
+    input.addEventListener('input', () => {
+        // Clear stale active descendant on new typing
+        input.removeAttribute('aria-activedescendant');
+        activeDescendantIdx = -1;
+        doSearch();
+    });
+
+    // AJAX submit: prevent navigation, show best match (forms guide)
+    form.addEventListener('submit', (e) => {
         e.preventDefault();
-        items.forEach(el => el.classList.remove('focused'));
-        idx = (idx + 1) % items.length;
-        items[idx]?.classList.add('focused');
-        items[idx]?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        items.forEach(el => el.classList.remove('focused'));
-        idx = (idx - 1 + items.length) % items.length;
-        items[idx]?.classList.add('focused');
-        items[idx]?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'Enter') {
-        const focused = box.querySelector('.suggestion-item.focused');
-        if (focused) focused.click();
-        else if (items.length === 1) items[0].click();
-    } else if (e.key === 'Escape') {
-        hideSuggestions();
+        const q = input.value.trim();
+        if (!allKota.length || !q) return;
+        const results = filterKota(q);
+        if (results.length === 1) {
+            selectCity(results[0]);
+        } else if (results.length > 1) {
+            showSuggestions(results, q);
+            input.focus();
+        } else {
+            showSuggestions([], q);
+        }
+    });
+
+    document.addEventListener('click', e => {
+        if (!document.getElementById('searchWrap').contains(e.target)) hideSuggestions();
+    });
+
+    // IME-safe + combobox keyboard (forms guide: check isComposing)
+    input.addEventListener('keydown', function (e) {
+        if (e.isComposing) return;
+        if (box.hidden) return;
+        const items = box.querySelectorAll('.suggestion-item');
+        if (!items.length) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            moveFocus(1, items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            moveFocus(-1, items);
+        } else if (e.key === 'Enter') {
+            const focused = box.querySelector('.suggestion-item.focused > button');
+            if (focused) {
+                e.preventDefault();
+                focused.click();
+            }
+        } else if (e.key === 'Escape') {
+            hideSuggestions();
+            input.removeAttribute('aria-activedescendant');
+        }
+    });
+
+    function moveFocus(delta, items) {
+        items.forEach(el => { el.classList.remove('focused'); el.querySelector('button')?.setAttribute('aria-selected', 'false'); });
+        activeDescendantIdx = (activeDescendantIdx + delta + items.length) % items.length;
+        const el = items[activeDescendantIdx];
+        el?.classList.add('focused');
+        const btn = el?.querySelector('button');
+        btn?.setAttribute('aria-selected', 'true');
+        if (el?.id) input.setAttribute('aria-activedescendant', el.id);
+        el?.scrollIntoView({ block: 'nearest' });
     }
-});
+}
 
 function highlightMatch(text, q) {
-    if (!q) return text;
+    const safe = escapeHtml(text);
+    if (!q) return safe;
     const idx = text.toLowerCase().indexOf(q.toLowerCase());
-    if (idx < 0) return text;
-    return text.slice(0, idx) +
-        `<mark style="background:rgba(200,150,62,0.3);border-radius:3px;padding:0 1px">${text.slice(idx, idx + q.length)}</mark>` +
-        text.slice(idx + q.length);
+    if (idx < 0) return safe;
+    return escapeHtml(text.slice(0, idx)) +
+        `<mark style="background:rgba(200,150,62,0.3);border-radius:3px;padding:0 1px">${escapeHtml(text.slice(idx, idx + q.length))}</mark>` +
+        escapeHtml(text.slice(idx + q.length));
 }
 
 function showSuggestions(items, q = '') {
     const box = document.getElementById('suggestions');
+    const input = document.getElementById('searchInput');
+    activeDescendantIdx = -1;
+    input.removeAttribute('aria-activedescendant');
     if (!items.length) {
-        box.innerHTML = `<div class="suggestion-item" style="color:var(--muted);cursor:default">Kota tidak ditemukan</div>`;
-        box.style.display = 'block';
+        box.innerHTML = `<li class="suggestion-item" role="presentation" style="padding:12px 18px;color:var(--muted)">Kota tidak ditemukan</li>`;
+        box.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
         return;
     }
-    box.innerHTML = items.map(item => `
-    <div class="suggestion-item" data-id="${item.id}" data-lokasi="${item.lokasi}">
-      <span>${highlightMatch(item.lokasi, q)}</span>
-    </div>`).join('');
+    box.innerHTML = items.map((item, i) => `
+    <li class="suggestion-item" role="option" id="suggestion-${i}" aria-selected="false" data-id="${escapeHtml(item.id)}" data-lokasi="${escapeHtml(item.lokasi)}">
+      <button type="button" tabindex="-1">${highlightMatch(item.lokasi, q)}</button>
+    </li>`).join('');
     box.querySelectorAll('.suggestion-item[data-id]').forEach(el => {
-        el.addEventListener('click', () => selectCity({ id: el.dataset.id, lokasi: el.dataset.lokasi }));
+        el.querySelector('button').addEventListener('click', () => selectCity({ id: el.dataset.id, lokasi: el.dataset.lokasi }));
     });
-    box.style.display = 'block';
+    box.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
 }
 
 function hideSuggestions() {
     const box = document.getElementById('suggestions');
-    box.style.display = 'none';
+    const input = document.getElementById('searchInput');
+    box.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+    activeDescendantIdx = -1;
     box.querySelectorAll('.suggestion-item').forEach(el => el.classList.remove('focused'));
 }
 
@@ -275,7 +364,7 @@ function selectCity(item) {
     document.getElementById('searchStatus').textContent = '';
 
     const topRow = document.getElementById('topRow');
-    topRow.style.display = '';
+    topRow.hidden = false;
     topRow.style.animation = 'fadeIn 0.3s ease both';
     document.getElementById('locationName').textContent = item.lokasi;
     document.getElementById('locationSub').textContent = `Kode: ${item.id}`;
@@ -283,28 +372,32 @@ function selectCity(item) {
 
     buildDateStrip();
     loadSchedule();
+    document.getElementById('mainContent').focus({ preventScroll: true });
 }
 
 // ── Date strip ─────────────────────────────────────────────────────
 function buildDateStrip() {
     const strip = document.getElementById('dateStrip');
-    strip.style.display = 'flex';
+    strip.hidden = false;
     strip.innerHTML = '';
     const today = new Date();
+    const dn = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     [-1, 0, 1, 2, 3].forEach(offset => {
         const d = new Date(today);
         d.setDate(today.getDate() + offset);
         const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'date-btn' + (ds === currentDate ? ' active' : '');
-        const dn = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        if (ds === currentDate) btn.setAttribute('aria-current', 'date');
         btn.textContent = offset === 0 ? 'Hari Ini' : `${dn[d.getDay()]} ${d.getDate()}`;
-        btn.onclick = () => {
+        btn.addEventListener('click', () => {
             currentDate = ds;
-            document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+            strip.querySelectorAll('.date-btn').forEach(b => { b.classList.remove('active'); b.removeAttribute('aria-current'); });
             btn.classList.add('active');
+            btn.setAttribute('aria-current', 'date');
             loadSchedule();
-        };
+        });
         strip.appendChild(btn);
     });
 }
@@ -313,7 +406,7 @@ function buildDateStrip() {
 async function loadSchedule() {
     if (!currentKota) return;
     const content = document.getElementById('mainContent');
-    content.innerHTML = '<div class="loading-wrap"><div class="spinner"></div></div>';
+    content.innerHTML = '<div class="loading-wrap"><progress class="loading-spinner" aria-label="Memuat jadwal sholat"></progress></div>';
     try {
         const isToday = currentDate === todayStr();
         const path = isToday
@@ -322,29 +415,28 @@ async function loadSchedule() {
         const res = await apiFetch(path);
         const data = await res.json();
 
-        // Struktur: data.data.jadwal["YYYY-MM-DD"] = { subuh, dzuhur, ... }
         let jadwal = null;
         const raw = data?.data?.jadwal;
 
         if (raw && typeof raw === 'object') {
-            // Cek apakah nested by date key (misal: { "2026-03-08": { subuh:... } })
             const keys = Object.keys(raw);
             if (keys.length > 0 && typeof raw[keys[0]] === 'object' && 'subuh' in raw[keys[0]]) {
-                jadwal = raw[keys[0]]; // ambil value dari date key pertama
+                jadwal = raw[keys[0]];
             } else if ('subuh' in raw) {
-                jadwal = raw; // flat langsung
+                jadwal = raw;
             }
         }
 
         if (!jadwal) {
             console.error('Struktur API tidak dikenali:', JSON.stringify(data).slice(0, 500));
-            content.innerHTML = `<div class="state-msg"><p>Format data tidak dikenali.<br><small style="opacity:.6">Lihat console untuk detail.</small></p></div>`;
+            content.innerHTML = `<div class="state-msg" role="alert"><p>Format data tidak dikenali.<br><small style="opacity:.6">Lihat console untuk detail.</small></p></div>`;
             return;
         }
 
+        await yieldToMain();
         renderSchedule(jadwal, isToday);
     } catch (e) {
-        content.innerHTML = '<div class="state-msg"><p>Gagal memuat data. Periksa koneksi internet.</p></div>';
+        content.innerHTML = '<div class="state-msg" role="alert"><p>Gagal memuat data. Periksa koneksi internet.</p></div>';
     }
 }
 
@@ -362,7 +454,6 @@ function getNextPrayer(jadwal) {
             if (dt > now) return { ...p, time: t, dt };
         }
     }
-    // Semua waktu sudah lewat → tampilkan Subuh (besok)
     const subuhTime = jadwal.subuh || jadwal.imsak || '—';
     return { ...PRAYERS[0], time: subuhTime, dt: null, note: 'besok' };
 }
@@ -385,7 +476,7 @@ function formatCountdown(dt) {
     return `${s}s lagi`;
 }
 
-// ── Render ─────────────────────────────────────────────────────────
+// ── Render (semantic lists, time elements, polite live regions) ────
 function renderSchedule(jadwal, isToday) {
     clearInterval(countdownInterval);
     const content = document.getElementById('mainContent');
@@ -400,123 +491,123 @@ function renderSchedule(jadwal, isToday) {
     const nextSlot = document.getElementById('nextPrayerSlot');
     if (isToday && next) {
         nextSlot.innerHTML = `<div class="next-prayer-card">
-      <div class="next-label">${next.note ? 'Sholat Pertama Besok' : 'Sholat Berikutnya'}</div>
-      <div class="next-prayer-name">${next.name}</div>
-      <div class="next-prayer-time">${next.time}</div>
-      <div class="next-countdown">
-        <i data-lucide="clock" style="width:13px;height:13px;stroke:rgba(255,255,255,0.9);stroke-width:2.5;flex-shrink:0"></i>
-        <span id="cdSpan">${next.dt ? formatCountdown(next.dt) : next.note ? 'Besok' : '—'}</span>
-      </div>
+      <p class="next-label">${next.note ? 'Sholat Pertama Besok' : 'Sholat Berikutnya'}</p>
+      <h2 class="next-prayer-name">${escapeHtml(next.name)}</h2>
+      <p class="next-prayer-time"><time datetime="${escapeHtml(next.time)}">${escapeHtml(next.time)}</time></p>
+      <p class="next-countdown">
+        <i data-lucide="clock" aria-hidden="true" style="width:13px;height:13px;stroke:rgba(255,255,255,0.9);stroke-width:2.5;flex-shrink:0"></i>
+        <span id="cdSpan" aria-live="off">${next.dt ? escapeHtml(formatCountdown(next.dt)) : next.note ? 'Besok' : '—'}</span>
+      </p>
     </div>`;
     } else {
         nextSlot.innerHTML = '';
     }
 
-    let html = `<div class="date-header"><div class="date-main">${dateStr}</div></div>`;
+    let html = `<div class="date-header"><h2 class="date-main">${escapeHtml(dateStr)}</h2></div>`;
 
-    html += `<div class="prayers-grid">`;
+    html += `<ul class="prayers-grid" role="list" aria-label="Jadwal sholat">`;
     PRAYERS.forEach(p => {
         const t = jadwal[p.key]; if (!t) return;
         const isActive = activePrayer === p.key;
-        html += `<div class="prayer-card ${isActive ? 'active-prayer' : ''}">
-      <div class="prayer-icon" style="background:${p.bg}">
+        html += `<li class="prayer-card ${isActive ? 'active-prayer' : ''}"${isActive ? ' aria-current="true"' : ''}>
+      <span class="prayer-icon" aria-hidden="true" style="background:${p.bg}">
         <i data-lucide="${p.icon}" style="width:20px;height:20px;stroke:${p.color};stroke-width:1.8"></i>
-      </div>
-      <div class="prayer-info">
-        <div class="prayer-name-en">${p.en}</div>
-        <div class="prayer-name">${p.name}</div>
-      </div>
-      <div class="prayer-time">${t}</div>
-      ${isActive ? '<div class="active-pip"></div>' : ''}
-    </div>`;
+      </span>
+      <span class="prayer-info">
+        <span class="prayer-name-en">${p.en}</span>
+        <span class="prayer-name">${p.name}</span>
+      </span>
+      <time class="prayer-time" datetime="${escapeHtml(t)}">${escapeHtml(t)}</time>
+      ${isActive ? '<span class="active-pip" aria-hidden="true"></span><span class="visually-hidden">(waktu saat ini)</span>' : ''}
+    </li>`;
     });
-    html += `</div>`;
+    html += `</ul>`;
 
     const extras = [];
     if (jadwal.imsak) extras.push({ label: 'Imsak', val: jadwal.imsak });
     if (jadwal.terbit) extras.push({ label: 'Terbit', val: jadwal.terbit });
     if (jadwal.dhuha) extras.push({ label: 'Dhuha', val: jadwal.dhuha });
     if (extras.length) {
-        html += `<div class="divider">
+        html += `<div class="divider" aria-hidden="true">
       <div class="divider-line">
         <div class="divider-ornament">❧ <i data-lucide="star" style="width:9px;height:9px;stroke:var(--gold);fill:var(--gold);stroke-width:1.5"></i> ❧</div>
       </div>
-      <div class="divider-arabic">رَمَضَان الْمُبَارَك</div>
+      <div class="divider-arabic" lang="ar">رَمَضَان الْمُبَارَك</div>
       <div class="divider-label">Waktu Ramadhan</div>
       <div class="divider-line">
         <div class="divider-ornament">❧ <i data-lucide="moon" style="width:9px;height:9px;stroke:var(--gold);fill:var(--gold);fill-opacity:0.5;stroke-width:1.5"></i> ❧</div>
       </div>
-    </div><div class="prayers-grid">`;
+    </div><ul class="prayers-grid" role="list" aria-label="Waktu tambahan">`;
         const extraIcons = { Imsak: 'moon', Terbit: 'sunrise', Dhuha: 'sun-dim' };
         extras.forEach(e => {
             const ic = extraIcons[e.label] || 'moon';
-            html += `<div class="prayer-card">
-        <div class="prayer-icon" style="background:rgba(200,150,62,0.08)">
+            html += `<li class="prayer-card">
+        <span class="prayer-icon" aria-hidden="true" style="background:rgba(200,150,62,0.08)">
           <i data-lucide="${ic}" style="width:20px;height:20px;stroke:var(--gold);stroke-width:1.8"></i>
-        </div>
-        <div class="prayer-info"><div class="prayer-name-en">Ramadhan</div><div class="prayer-name">${e.label}</div></div>
-        <div class="prayer-time">${e.val}</div>
-      </div>`;
+        </span>
+        <span class="prayer-info"><span class="prayer-name-en">Ramadhan</span><span class="prayer-name">${escapeHtml(e.label)}</span></span>
+        <time class="prayer-time" datetime="${escapeHtml(e.val)}">${escapeHtml(e.val)}</time>
+      </li>`;
         });
-        html += `</div>`;
+        html += `</ul>`;
     }
 
     content.innerHTML = html;
-    lucide.createIcons();
+    refreshIcons();
 
     if (isToday && next?.dt) {
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
         countdownInterval = setInterval(() => {
             const el = document.getElementById('cdSpan');
             if (el) el.textContent = formatCountdown(next.dt);
             else clearInterval(countdownInterval);
-        }, 1000);
+        }, reduceMotion ? 5000 : 1000);
     }
 }
 
-// ── Boot ───────────────────────────────────────────────────────────
-window.onload = () => {
-    lucide.createIcons();
+// ── Boot (deferred, DOM-ready) ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    refreshIcons();
+    bindSearch();
     loadAllKota();
     initMusic();
-};
+});
 
-// ── Music ──────────────────────────────────────────────────────────
+// ── Music with native <dialog> (no SweetAlert dependency) ──────────
 function initMusic() {
     const audio = document.getElementById('bgAudio');
     const bar = document.getElementById('musicBar');
     const btn = document.getElementById('musicToggle');
     const wave = document.getElementById('musicWave');
+    const dialog = document.getElementById('musicDialog');
+    if (!audio || !dialog) return;
 
-    Swal.fire({
-        title: '<span style="font-family:Amiri,serif;font-size:1.4rem;color:#1a5c5a">🎵 Putar Musik?</span>',
-        html: '<p style="font-size:0.88rem;color:#7a7060;margin:0">Ya Leel Ya Leel — Nasheed<br>akan diputar sebagai latar</p>',
-        showCancelButton: true,
-        confirmButtonText: 'Ya, Putar',
-        cancelButtonText: 'Tidak',
-        confirmButtonColor: '#1a5c5a',
-        cancelButtonColor: '#c8963e',
-        background: '#f5f0e8',
-        borderRadius: '18px',
-        customClass: { popup: 'swal-music-popup' },
-        width: '320px',
-    }).then(result => {
-        if (result.isConfirmed) {
+    // Show once per session unless user already decided
+    let decided = null;
+    try { decided = sessionStorage.getItem('jadwalsholat:music'); } catch (e) { /* ignore */ }
+    if (!decided && typeof dialog.showModal === 'function') {
+        // Delay slightly so LCP isn't blocked
+        setTimeout(() => {
+            if (!sessionStorage.getItem('jadwalsholat:music')) dialog.showModal();
+        }, 800);
+    }
+
+    dialog.addEventListener('close', () => {
+        try { sessionStorage.setItem('jadwalsholat:music', dialog.returnValue || 'dismiss'); } catch (e) { /* ignore */ }
+        if (dialog.returnValue === 'confirm') {
             audio.volume = 0.45;
             audio.play().then(() => {
-                bar.style.display = 'flex';
-                lucide.createIcons({ nodes: [btn] });
-            }).catch(() => { });
+                bar.hidden = false;
+                refreshIcons(btn);
+            }).catch(() => { /* autoplay blocked, stay hidden */ });
         }
     });
 
-    // Toggle play/pause
     btn.addEventListener('click', () => {
         if (audio.paused) {
             audio.play();
-            updateMusicUI(true);
         } else {
             audio.pause();
-            updateMusicUI(false);
         }
     });
 
@@ -526,7 +617,11 @@ function initMusic() {
     function updateMusicUI(playing) {
         const icon = document.getElementById('musicIcon');
         wave.className = 'music-wave' + (playing ? '' : ' paused');
-        icon.setAttribute('data-lucide', playing ? 'pause' : 'play');
-        lucide.createIcons({ nodes: [icon] });
+        btn.setAttribute('aria-pressed', String(playing));
+        btn.setAttribute('aria-label', playing ? 'Jeda musik' : 'Putar musik');
+        if (icon) {
+            icon.setAttribute('data-lucide', playing ? 'pause' : 'play');
+            refreshIcons(icon);
+        }
     }
 }

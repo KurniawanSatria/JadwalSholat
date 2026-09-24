@@ -3,103 +3,133 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jadwal Sholat</title>
+  <title>Jadwal Sholat — Jadwal Waktu Sholat Indonesia</title>
+  <meta name="description" content="Jadwal waktu sholat Subuh, Dzuhur, Ashar, Maghrib, Isya untuk semua kota/kabupaten di Indonesia. Data akurat dari myquran.com.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e8">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1514">
+  <meta property="og:title" content="Jadwal Waktu Sholat">
+  <meta property="og:description" content="Cari kota dan lihat jadwal sholat hari ini.">
+  <meta property="og:type" content="website">
+
+  <!-- Resource hints: preconnect for TLS handshake (performance guide) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://api.myquran.com">
+  <link rel="preconnect" href="https://id.wikipedia.org">
+  <link rel="dns-prefetch" href="https://unpkg.com">
+
   <link
     href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap"
     rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <link href="./css/style.css" rel="stylesheet">
+  <!-- Defer non-critical third-party scripts (performance guide: don't block parser) -->
+  <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script defer src="./js/script.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">Lewati ke jadwal sholat</a>
+
   <div class="app">
+    <header class="header">
+      <p class="header-arabic" lang="ar">الصَّلَاةُ خَيْرٌ مِنَ النَّوْمِ</p>
+      <h1 class="header-title">Jadwal Waktu Sholat</h1>
+    </header>
 
-    <!-- Header -->
-    <div class="header">
-      <div class="header-arabic">الصَّلَاةُ خَيْرٌ مِنَ النَّوْمِ</div>
-      <div class="header-title">Jadwal Waktu Sholat</div>
-    </div>
+    <search>
+      <form id="searchForm" action="#" method="get" autocomplete="off">
+        <label class="visually-hidden" for="searchInput">Cari kota atau kabupaten</label>
+        <div class="search-wrap" id="searchWrap">
+          <input type="search" class="search-input" id="searchInput" name="q"
+            placeholder="Cari kota / kabupaten..."
+            autocomplete="off" enterkeyhint="search"
+            role="combobox" aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list" />
+          <button class="search-btn" id="searchBtn" type="submit" aria-label="Cari jadwal sholat">
+            <i data-lucide="search" aria-hidden="true" style="width:16px;height:16px;stroke:#fff;stroke-width:2.5"></i>
+          </button>
+          <ul class="suggestions" id="suggestions" role="listbox" aria-label="Hasil pencarian kota" hidden></ul>
+        </div>
+      </form>
+    </search>
+    <p class="search-status" id="searchStatus" role="status" aria-live="polite"></p>
 
-    <!-- Search -->
-    <div class="search-wrap" id="searchWrap">
-      <input type="text" class="search-input" id="searchInput" placeholder="Cari kota / kabupaten..."
-        autocomplete="off" />
-      <button class="search-btn" id="searchBtn">
-        <i data-lucide="search" style="width:16px;height:16px;stroke:#fff;stroke-width:2.5"></i>
-      </button>
-      <div class="suggestions" id="suggestions" style="display:none"></div>
-    </div>
-    <div class="search-status" id="searchStatus"></div>
-
-    <!-- Top row: location + next prayer (side-by-side on desktop) -->
-    <div class="top-row" id="topRow" style="display:none">
-      <div class="location-badge" id="locationBadge">
-        <div class="location-bg" id="locationBg"></div>
-        <div class="location-bg-overlay"></div>
+    <!-- Top row: location + next prayer -->
+    <div class="top-row" id="topRow" hidden>
+      <article class="location-badge" id="locationBadge" aria-labelledby="locationName">
+        <div class="location-bg" id="locationBg" aria-hidden="true"></div>
+        <div class="location-bg-overlay" aria-hidden="true"></div>
         <div class="location-content">
           <div class="location-top">
-            <div class="location-dot"></div>
-            <div class="location-name" id="locationName">—</div>
-            <div class="location-province" id="locationProvince"></div>
+            <span class="location-dot" aria-hidden="true"></span>
+            <h2 class="location-name" id="locationName">—</h2>
+            <p class="location-province" id="locationProvince"></p>
           </div>
-          <div class="location-desc" id="locationDesc"></div>
-          <a class="location-wiki-link" id="locationWikiLink" href="#" target="_blank">
-            <i data-lucide="external-link" style="width:10px;height:10px;stroke:currentColor;stroke-width:2"></i>
+          <p class="location-desc" id="locationDesc"></p>
+          <a class="location-wiki-link" id="locationWikiLink" href="#" target="_blank" rel="noopener" hidden>
+            <i data-lucide="external-link" aria-hidden="true" style="width:10px;height:10px;stroke:currentColor;stroke-width:2"></i>
             Wikipedia
           </a>
         </div>
-        <div class="location-sub" id="locationSub"></div>
-      </div>
-      <div id="nextPrayerSlot"></div>
+        <p class="location-sub" id="locationSub"></p>
+      </article>
+      <section id="nextPrayerSlot" aria-live="polite" aria-label="Sholat berikutnya"></section>
     </div>
 
-    <!-- Date strip -->
-    <div class="date-strip" id="dateStrip" style="display:none"></div>
+    <nav class="date-strip" id="dateStrip" aria-label="Pilih tanggal jadwal" hidden></nav>
 
-    <!-- Main content -->
-    <div id="mainContent">
+    <main id="mainContent" tabindex="-1">
       <div class="state-msg">
-        <i data-lucide="map-pin"
+        <i data-lucide="map-pin" aria-hidden="true"
           style="width:48px;height:48px;stroke:var(--teal);opacity:0.35;margin-bottom:12px;display:block;margin-inline:auto"></i>
         <p>Masukkan nama kota untuk melihat jadwal sholat</p>
       </div>
-    </div>
+    </main>
 
-    <!-- Footer -->
     <footer class="footer">
-      <div class="footer-ornament">
+      <div class="footer-ornament" aria-hidden="true">
         <i data-lucide="moon"
           style="width:11px;height:11px;stroke:var(--gold);fill:var(--gold);fill-opacity:0.35;stroke-width:1.5"></i>
         <i data-lucide="star" style="width:7px;height:7px;stroke:var(--gold);fill:var(--gold);stroke-width:1.5"></i>
         <i data-lucide="moon"
           style="width:11px;height:11px;stroke:var(--gold);fill:var(--gold);fill-opacity:0.35;stroke-width:1.5"></i>
       </div>
-      <div class="footer-arabic">كورنياوان ساتريا</div>
-      <div class="footer-sub">dibuat dengan ❤️ oleh <a href="https://instagram.com/krniwnstria"
-          target="_blank">Kurniawan Satria</a> &nbsp;·&nbsp; data dari <a href="https://api.myquran.com"
-          target="_blank">myquran.com</a></div>
+      <p class="footer-arabic" lang="ar">كورنياوان ساتريا</p>
+      <p class="footer-sub">dibuat dengan ❤️ oleh <a href="https://instagram.com/krniwnstria"
+          target="_blank" rel="noopener">Kurniawan Satria</a> &nbsp;·&nbsp; data dari <a href="https://api.myquran.com"
+          target="_blank" rel="noopener">myquran.com</a></p>
     </footer>
-
   </div>
 
-  <!-- Audio -->
-  <audio id="bgAudio" loop preload="auto">
+  <!-- Audio: preload none until user opts in (performance + native media guide) -->
+  <audio id="bgAudio" loop preload="none">
     <source src="https://github.com/KurniawanSatria/Muslim/raw/refs/heads/main/yaleel%20yaleel.mp3" type="audio/mpeg">
   </audio>
 
+  <!-- Native dialog replaces SweetAlert2 (html guide: use <dialog> for modal) -->
+  <dialog id="musicDialog" class="music-dialog" closedby="any" aria-labelledby="musicDialogTitle">
+    <form method="dialog" class="music-dialog-form">
+      <p class="music-dialog-emoji" aria-hidden="true">🎵</p>
+      <h2 id="musicDialogTitle" class="music-dialog-title">Putar Musik?</h2>
+      <p class="music-dialog-desc">Ya Leel Ya Leel — Nasheed<br>akan diputar sebagai latar</p>
+      <div class="music-dialog-actions">
+        <button value="cancel" class="btn-ghost" formnovalidate>Tidak</button>
+        <button value="confirm" class="btn-primary" autofocus>Ya, Putar</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Floating music bar -->
-  <div class="music-bar" id="musicBar" style="display:none">
-    <button class="music-btn" id="musicToggle" title="Play/Pause">
-      <i data-lucide="pause" id="musicIcon" style="width:18px;height:18px;stroke:var(--gold-light);stroke-width:2"></i>
+  <div class="music-bar" id="musicBar" role="region" aria-label="Pemutar musik latar" hidden>
+    <button class="music-btn" id="musicToggle" type="button" aria-label="Jeda musik" aria-pressed="true">
+      <i data-lucide="pause" id="musicIcon" aria-hidden="true" style="width:18px;height:18px;stroke:var(--gold-light);stroke-width:2"></i>
     </button>
     <div class="music-info">
-      <div class="music-title">Ya Leel Ya Leel</div>
-      <div class="music-sub">Nasheed · loop</div>
+      <p class="music-title">Ya Leel Ya Leel</p>
+      <p class="music-sub">Nasheed · loop</p>
     </div>
-    <div class="music-wave" id="musicWave">
+    <div class="music-wave" id="musicWave" aria-hidden="true">
       <span></span><span></span><span></span><span></span><span></span>
     </div>
   </div>
-  <script src="./js/script.js"></script>
 </body>
 </html>

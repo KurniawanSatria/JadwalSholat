@@ -1,13 +1,94 @@
   :root {
-      --ink: #0f1117;
-      --paper: #f5f0e8;
+      /* Raw tokens for fallback composition */
+      --ink-light: #0f1117;
+      --ink-dark: #ece7db;
+      --paper-light: #f5f0e8;
+      --paper-dark: #0f1514;
       --gold: #c8963e;
       --gold-light: #e8c97a;
       --teal: #1a5c5a;
       --teal-light: #2d8c89;
-      --muted: #7a7060;
-      --card-bg: rgba(255, 255, 255, 0.55);
-      --border: rgba(200, 150, 62, 0.25);
+      --muted-light: #7a7060;
+      --muted-dark: #a89e8d;
+      --card-bg-light: rgba(255, 255, 255, 0.55);
+      --card-bg-dark: rgba(255, 255, 255, 0.06);
+      --border-light: rgba(200, 150, 62, 0.25);
+      --border-dark: rgba(232, 201, 122, 0.22);
+
+      /* MANDATORY: viewport-wide theming (dark-mode guide) */
+      color-scheme: light dark;
+
+      --ink: var(--ink-light);
+      --paper: var(--paper-light);
+      --muted: var(--muted-light);
+      --card-bg: var(--card-bg-light);
+      --border: var(--border-light);
+
+      accent-color: var(--teal);
+      scrollbar-color: var(--gold) transparent;
+  }
+
+  @media (prefers-color-scheme: dark) {
+      :root {
+          --ink: var(--ink-dark);
+          --paper: var(--paper-dark);
+          --muted: var(--muted-dark);
+          --card-bg: var(--card-bg-dark);
+          --border: var(--border-dark);
+      }
+  }
+
+  @supports (color: light-dark(white, black)) {
+      :root {
+          --ink: light-dark(var(--ink-light), var(--ink-dark));
+          --paper: light-dark(var(--paper-light), var(--paper-dark));
+          --muted: light-dark(var(--muted-light), var(--muted-dark));
+          --card-bg: light-dark(var(--card-bg-light), var(--card-bg-dark));
+          --border: light-dark(var(--border-light), var(--border-dark));
+      }
+  }
+
+  [hidden] {
+      display: none !important;
+  }
+
+  .visually-hidden {
+      position: absolute;
+      clip-path: inset(50%);
+      overflow: hidden;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      border: 0;
+      white-space: nowrap;
+  }
+
+  .skip-link {
+      position: absolute;
+      top: -100px;
+      left: 12px;
+      z-index: 1000;
+      background: var(--teal);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: top 0.2s ease;
+  }
+
+  .skip-link:focus-visible {
+      top: 12px;
+      outline: 3px solid var(--gold-light);
+      outline-offset: 2px;
+  }
+
+  :focus-visible {
+      outline: 2px solid var(--teal-light);
+      outline-offset: 2px;
+      border-radius: 4px;
   }
 
   * {
@@ -192,20 +273,28 @@
       border: 1.5px solid var(--border);
       border-radius: 14px;
       font-family: 'DM Sans', sans-serif;
-      font-size: 0.95rem;
+      font-size: 1rem;
+      min-height: 48px;
       color: var(--ink);
+      color-scheme: light dark;
       outline: none;
       transition: border-color 0.25s, box-shadow 0.25s;
       backdrop-filter: blur(8px);
+  }
+
+  .search-input:user-invalid {
+      border-color: #c85040;
   }
 
   .search-input::placeholder {
       color: var(--muted);
   }
 
-  .search-input:focus {
+  .search-input:focus-visible {
       border-color: var(--teal-light);
-      box-shadow: 0 0 0 3px rgba(45, 140, 137, 0.12);
+      box-shadow: 0 0 0 3px rgba(45, 140, 137, 0.18);
+      outline: 2px solid var(--teal-light);
+      outline-offset: 2px;
   }
 
   .search-btn {
@@ -231,13 +320,16 @@
       transform: translateY(-50%) scale(1.07);
   }
 
-  /* Suggestions dropdown */
+  /* Suggestions dropdown — ul[role=listbox] (html + forms guide) */
   .suggestions {
       position: absolute;
       top: calc(100% + 6px);
       left: 0;
       right: 0;
-      background: #fff;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      background: light-dark(#fff, #1a2221);
       border: 1.5px solid var(--border);
       border-radius: 14px;
       overflow: hidden;
@@ -251,18 +343,32 @@
   }
 
   .suggestion-item {
-      padding: 12px 18px;
-      cursor: pointer;
+      padding: 0;
       font-size: 0.9rem;
-      transition: background 0.15s;
+      display: block;
+  }
+
+  .suggestion-item > button {
+      width: 100%;
+      padding: 12px 18px;
+      background: none;
+      border: 0;
+      text-align: left;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      min-height: 44px;
   }
 
-  .suggestion-item:hover,
-  .suggestion-item.focused {
-      background: rgba(26, 92, 90, 0.06);
+  .suggestion-item > button:hover,
+  .suggestion-item.focused > button,
+  .suggestion-item > button:focus-visible {
+      background: rgba(26, 92, 90, 0.08);
+      outline: 2px solid var(--teal-light);
+      outline-offset: -2px;
   }
 
   .suggestion-item:not(:last-child) {
@@ -504,15 +610,19 @@
       color: rgba(255, 255, 255, 0.9);
   }
 
-  /* Prayer grid */
+  /* Prayer grid — ul reset (accessibility: native list semantics) */
   .prayers-grid {
       display: flex;
       flex-direction: column;
       gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
       animation: slideUp 0.6s 0.25s ease both;
   }
 
   .prayer-card {
+      list-style: none;
       display: flex;
       align-items: center;
       background: var(--card-bg);
@@ -785,6 +895,37 @@
       }
   }
 
+  /* Accessible indeterminate spinner (spinner guide: native <progress>) */
+  progress.loading-spinner:indeterminate {
+      --size: 32px;
+      --thickness: 3px;
+      --spinner-color: var(--teal-light);
+      --track-color: color-mix(in srgb, var(--teal) 12%, transparent);
+      width: var(--size);
+      height: var(--size);
+      border-radius: 50%;
+      appearance: none;
+      background: conic-gradient(from 90deg, var(--spinner-color) 100deg, transparent 0) var(--track-color);
+      border: var(--thickness) solid transparent;
+      background-clip: border-area;
+      background-origin: border-box;
+      animation: progress-spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+  }
+
+  progress.loading-spinner:indeterminate::-webkit-progress-bar,
+  progress.loading-spinner:indeterminate::-webkit-progress-value,
+  progress.loading-spinner:indeterminate::-moz-progress-bar {
+      display: none;
+      background: none;
+  }
+
+  @keyframes progress-spin {
+      to { rotate: 1turn; }
+  }
+
+  /* Legacy class kept for no-JS fallback */
   .spinner {
       display: inline-block;
       width: 20px;
@@ -891,5 +1032,118 @@
 
       50% {
           box-shadow: 0 0 0 6px rgba(200, 150, 62, 0.1);
+      }
+  }
+
+  /* Native dialog (html guide: <dialog> modal, ::backdrop, closedby) */
+  .music-dialog {
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      background: light-dark(#f5f0e8, #1a2221);
+      color: var(--ink);
+      padding: 0;
+      width: min(320px, calc(100vw - 40px));
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  }
+
+  .music-dialog::backdrop {
+      background: rgba(15, 17, 23, 0.45);
+      backdrop-filter: blur(3px);
+  }
+
+  .music-dialog-form {
+      padding: 24px 22px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+  }
+
+  .music-dialog-emoji {
+      font-size: 1.6rem;
+  }
+
+  .music-dialog-title {
+      font-family: 'Amiri', serif;
+      font-size: 1.4rem;
+      color: var(--teal);
+  }
+
+  .music-dialog-desc {
+      font-size: 0.88rem;
+      color: var(--muted);
+  }
+
+  .music-dialog-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+  }
+
+  .btn-primary, .btn-ghost {
+      flex: 1;
+      min-height: 44px;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+  }
+
+  .btn-primary {
+      background: var(--teal);
+      color: #fff;
+  }
+
+  .btn-primary:hover {
+      background: var(--teal-light);
+  }
+
+  .btn-ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--ink);
+  }
+
+  .btn-ghost:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+  }
+
+  /* Performance containment for isolated widgets (performance guide) */
+  .prayer-card, .next-prayer-card, .location-badge, .music-bar {
+      contain: layout style paint;
+  }
+
+  @media (prefers-color-scheme: dark) {
+      body::before {
+          opacity: 0.5;
+      }
+      .next-prayer-card {
+          background: linear-gradient(135deg, #123c3b 0%, #1a5c5a 100%);
+      }
+      .search-input {
+          background: rgba(255, 255, 255, 0.06);
+      }
+  }
+
+  /* Respect reduced motion (spinner + accessibility guides) */
+  @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+      }
+      progress.loading-spinner:indeterminate {
+          animation: none;
+          background: var(--track-color);
+          border-top-color: var(--spinner-color);
+      }
+      .music-wave span {
+          animation: none;
+      }
+      html:focus-within {
+          scroll-behavior: auto;
       }
   }
