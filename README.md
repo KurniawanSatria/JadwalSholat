@@ -18,7 +18,7 @@
 | `css/style.css` | Token `light-dark()`, layout, kartu, dialog, spinner | Styling |
 | `index.html` | Markup semantik: landmark, `<search>`, `<dialog>`, ARIA | Markup |
 | `js/script.js` | Logika app: API fallback, filter kota, render, countdown | Logic |
-| `yaleel yaleel.mp3` | Nasheed lokal; pemutar pakai remote, ini cadangan | Audio |
+| Nasheed audio | Served from the Muslim repo; release asset backup on v1.0.0 | Audio |
 
 ## Description of Executables
 
